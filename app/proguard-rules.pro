@@ -1,0 +1,4 @@
+-keepattributes *Annotation*
+-keep class com.hackx.ruraledtech.data.local.entities.** { *; }
+-keep class com.hackx.ruraledtech.domain.model.** { *; }
+-keep class com.hackx.ruraledtech.data.remote.dto.** { *; }
