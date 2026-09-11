@@ -14,4 +14,7 @@ interface ProgressDao {
 
     @Query("SELECT * FROM lesson_progress WHERE learnerId = :learnerId")
     fun observeForLearner(learnerId: String): Flow<List<LessonProgressEntity>>
+
+    @Query("SELECT * FROM lesson_progress WHERE learnerId = :learnerId AND lessonId = :lessonId")
+    suspend fun get(learnerId: String, lessonId: String): LessonProgressEntity?
 }
