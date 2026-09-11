@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.hackx.ruraledtech.core.session.CurrentLearnerManager
 import com.hackx.ruraledtech.domain.model.Learner
 import com.hackx.ruraledtech.domain.repository.LearnerRepository
+import com.hackx.ruraledtech.domain.usecase.learner.EnsureTtsVoiceInstalledUseCase
 import com.hackx.ruraledtech.domain.usecase.learner.UpdateLearnerLanguageUseCase
 import com.hackx.ruraledtech.feature.common.SupportedLanguage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -21,6 +22,7 @@ import javax.inject.Inject
 class ProfileViewModel @Inject constructor(
     private val currentLearnerManager: CurrentLearnerManager,
     private val updateLearnerLanguageUseCase: UpdateLearnerLanguageUseCase,
+    private val ensureTtsVoiceInstalledUseCase: EnsureTtsVoiceInstalledUseCase,
     learnerRepository: LearnerRepository,
 ) : ViewModel() {
 
@@ -35,6 +37,9 @@ class ProfileViewModel @Inject constructor(
 
     fun changeLanguage(language: SupportedLanguage) {
         val learnerId = currentLearnerManager.currentLearnerId.value ?: return
-        viewModelScope.launch { updateLearnerLanguageUseCase(learnerId, language.tag) }
+        viewModelScope.launch {
+            updateLearnerLanguageUseCase(learnerId, language.tag)
+            ensureTtsVoiceInstalledUseCase(language.tag)
+        }
     }
 }

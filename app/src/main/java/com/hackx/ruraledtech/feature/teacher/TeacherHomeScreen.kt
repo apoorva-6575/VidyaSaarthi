@@ -98,6 +98,10 @@ fun TeacherHomeScreen(
                 )
             }
 
+            uiState.dashboard?.let { dashboard ->
+                DashboardSummaryCard(dashboard, modifier = Modifier.padding(bottom = 12.dp))
+            }
+
             if (uiState.error != null) {
                 Text(
                     "Error: ${uiState.error}",
@@ -150,6 +154,52 @@ fun TeacherHomeScreen(
             },
         )
     }
+}
+
+@Composable
+private fun DashboardSummaryCard(dashboard: TeacherDashboardSummary, modifier: Modifier = Modifier) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("Overview", style = MaterialTheme.typography.titleMedium)
+            if (dashboard.cachedAt != null) {
+                Text(
+                    "Cached from ${formatCachedAt(dashboard.cachedAt)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${dashboard.learnersCount}", style = MaterialTheme.typography.headlineSmall)
+                    Text("Learners", style = MaterialTheme.typography.bodySmall)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${dashboard.classesCount}", style = MaterialTheme.typography.headlineSmall)
+                    Text("Classes", style = MaterialTheme.typography.bodySmall)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${(dashboard.averageMastery * 100).toInt()}%", style = MaterialTheme.typography.headlineSmall)
+                    Text("Avg mastery", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            if (dashboard.weakConcepts.isNotEmpty()) {
+                Text(
+                    "Needs attention: ${dashboard.weakConcepts.joinToString(", ")}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun formatCachedAt(timestampMillis: Long): String {
+    val formatter = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault())
+    return formatter.format(java.util.Date(timestampMillis))
 }
 
 @Composable

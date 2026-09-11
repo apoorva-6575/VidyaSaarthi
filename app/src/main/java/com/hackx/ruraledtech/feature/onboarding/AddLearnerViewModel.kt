@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hackx.ruraledtech.core.datastore.PreferencesManager
 import com.hackx.ruraledtech.domain.usecase.learner.CreateLearnerUseCase
+import com.hackx.ruraledtech.domain.usecase.learner.EnsureTtsVoiceInstalledUseCase
 import com.hackx.ruraledtech.domain.usecase.learner.SelectLearnerUseCase
 import com.hackx.ruraledtech.feature.common.SupportedLanguage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -32,6 +33,7 @@ class AddLearnerViewModel @Inject constructor(
     private val createLearnerUseCase: CreateLearnerUseCase,
     private val selectLearnerUseCase: SelectLearnerUseCase,
     private val preferencesManager: PreferencesManager,
+    private val ensureTtsVoiceInstalledUseCase: EnsureTtsVoiceInstalledUseCase,
 ) : ViewModel() {
 
     private val _formState = MutableStateFlow(AddLearnerFormState())
@@ -54,6 +56,7 @@ class AddLearnerViewModel @Inject constructor(
 
     fun onLanguageChanged(language: SupportedLanguage) {
         _formState.value = _formState.value.copy(language = language)
+        viewModelScope.launch { ensureTtsVoiceInstalledUseCase(language.tag) }
     }
 
     fun submit(onCreated: () -> Unit) {

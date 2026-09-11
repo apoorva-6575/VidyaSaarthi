@@ -78,6 +78,20 @@ class SubmitQuizAttemptUseCase @Inject constructor(
 
         val result = learningEngine.processAttempt(learnerId, attempt)
         progressRepository.upsertMastery(result.updatedMastery)
+
+        val mastery = result.updatedMastery
+        syncRepository.enqueueEvent(
+            SyncEvent(
+                eventId = idGenerator.eventId(),
+                learnerId = learnerId,
+                deviceId = deviceId,
+                eventType = SyncEventType.MASTERY_UPDATED,
+                timestamp = mastery.lastUpdated,
+                payloadJson = masteryUpdatedPayload(mastery),
+                syncStatus = SyncStatus.PENDING,
+            ),
+        )
+
         result.recommendation?.let { recommendationRepository.saveRecommendation(it) }
         return QuizAttemptOutcome(correct = correct, learningResult = result)
     }
@@ -86,6 +100,19 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         Json.encodeToString(
             JsonObject.serializer(),
             JsonObject(mapOf("question_id" to JsonPrimitive(questionId), "correct" to JsonPrimitive(correct))),
+        )
+
+    private fun masteryUpdatedPayload(mastery: com.hackx.ruraledtech.domain.model.Mastery): String =
+        Json.encodeToString(
+            JsonObject.serializer(),
+            JsonObject(
+                mapOf(
+                    "concept_id" to JsonPrimitive(mastery.conceptId),
+                    "mastery" to JsonPrimitive(mastery.score),
+                    "confidence" to JsonPrimitive(mastery.confidence),
+                    "attempt_count" to JsonPrimitive(mastery.attemptCount),
+                ),
+            ),
         )
 }
 

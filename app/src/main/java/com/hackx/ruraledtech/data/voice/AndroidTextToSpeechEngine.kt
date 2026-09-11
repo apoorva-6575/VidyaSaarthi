@@ -1,6 +1,7 @@
 package com.hackx.ruraledtech.data.voice
 
 import android.content.Context
+import android.content.Intent
 import android.speech.tts.TextToSpeech
 import com.hackx.ruraledtech.core.common.SecureLogger
 import com.hackx.ruraledtech.domain.voice.TextToSpeechEngine
@@ -54,5 +55,25 @@ class AndroidTextToSpeechEngine @Inject constructor(
 
     override suspend fun stop() {
         tts?.stop()
+    }
+
+    override suspend fun isLanguageAvailable(languageTag: String): Boolean {
+        val engine = tts ?: return false
+        val locale = try {
+            Locale.forLanguageTag(languageTag)
+        } catch (e: Exception) {
+            return false
+        }
+        return engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE
+    }
+
+    override fun requestLanguageInstall(languageTag: String) {
+        try {
+            val intent = Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            SecureLogger.e("AndroidTTS", "Could not open TTS voice data installer for $languageTag", e)
+        }
     }
 }

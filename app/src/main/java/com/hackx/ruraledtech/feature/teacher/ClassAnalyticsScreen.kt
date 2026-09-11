@@ -37,21 +37,32 @@ fun ClassAnalyticsScreen(viewModel: ClassAnalyticsViewModel = hiltViewModel()) {
 
     Scaffold { padding ->
         when {
-            state.isOffline -> EmptyState(
-                "Analytics need an internet connection",
-                "Class-wide analytics are computed on the server. Connect and try again.",
-                Modifier.padding(padding),
-            )
             state.isLoading -> Column(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) { CircularProgressIndicator() }
-            state.error != null -> EmptyState("Couldn't load analytics", state.error!!, Modifier.padding(padding))
+            state.error != null && state.classAverages.isEmpty() && state.learnerRows.all { it.metrics == null } ->
+                EmptyState("Couldn't load analytics", state.error!!, Modifier.padding(padding))
+            state.isOffline && state.cachedAt == null && state.classAverages.isEmpty() -> EmptyState(
+                "Analytics need an internet connection",
+                "No cached analytics yet for this class. Connect and try again.",
+                Modifier.padding(padding),
+            )
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                val cachedAt = state.cachedAt
+                if (cachedAt != null) {
+                    item {
+                        Text(
+                            "Offline — showing cached data from ${formatCachedAt(cachedAt)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = ErrorRed,
+                        )
+                    }
+                }
                 item { Text("Class averages", style = MaterialTheme.typography.titleLarge) }
                 items(state.classAverages.entries.toList()) { (concept, average) ->
                     ConceptAverageRow(concept, average)
@@ -122,4 +133,9 @@ private fun masteryColor(score: Float): Color = when {
     score >= 0.85f -> MasteredConcept
     score >= 0.70f -> ProficientConcept
     else -> WeakConcept
+}
+
+private fun formatCachedAt(timestampMillis: Long): String {
+    val formatter = java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.getDefault())
+    return formatter.format(java.util.Date(timestampMillis))
 }

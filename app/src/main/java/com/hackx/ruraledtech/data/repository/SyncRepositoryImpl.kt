@@ -102,18 +102,24 @@ class SyncRepositoryImpl @Inject constructor(
                                 val score = payload.payload["mastery"]?.let {
                                     if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f
                                 } ?: 0f
+                                val confidence = payload.payload["confidence"]?.let {
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else null
+                                }
+                                val attemptCount = payload.payload["attempt_count"]?.let {
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toIntOrNull() else null
+                                }
 
-                                // Preserve conceptName/confidence/attemptCount from any existing
-                                // local row (this event only carries a score) rather than
-                                // clobbering them with placeholders.
+                                // Preserve conceptName from any existing local row (this event
+                                // doesn't carry a display name), and fall back to the existing
+                                // confidence/attemptCount only if this event omits them.
                                 val existing = masteryDao.get(payload.learner_id, conceptId)
                                 val masteryEntity = com.hackx.ruraledtech.data.local.entities.MasteryEntity(
                                     learnerId = payload.learner_id,
                                     conceptId = conceptId,
                                     conceptName = existing?.conceptName ?: conceptId,
                                     score = score,
-                                    confidence = existing?.confidence ?: 0.5f,
-                                    attemptCount = existing?.attemptCount ?: 1,
+                                    confidence = confidence ?: existing?.confidence ?: 0.5f,
+                                    attemptCount = attemptCount ?: existing?.attemptCount ?: 1,
                                     lastUpdated = timestampLong
                                 )
                                 masteryDao.upsert(masteryEntity)
