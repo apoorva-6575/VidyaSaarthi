@@ -19,7 +19,7 @@ def get_classes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), 
 @router.post("/", response_model=ClassGroupResponse)
 def create_class(class_in: ClassGroupCreate, db: Session = Depends(get_db), current_teacher: Teacher = Depends(get_current_teacher)):
     class_id = str(uuid.uuid4())
-    db_class = ClassGroup(  # type: ignore
+    db_class = ClassGroup(  
         id=class_id,
         name=class_in.name,
         grade=class_in.grade,
@@ -41,6 +41,7 @@ def add_learner_to_class(class_id: str, learner_id: str, db: Session = Depends(g
     if not db_learner:
         raise HTTPException(status_code=404, detail="Learner not found")
         
-    db_class.learners.append(db_learner)
-    db.commit()
+    if db_learner not in db_class.learners:
+        db_class.learners.append(db_learner)
+        db.commit()
     return {"status": "success", "message": "Learner added to class"}

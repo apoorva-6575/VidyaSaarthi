@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -22,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -54,6 +56,7 @@ fun LessonViewerScreen(
                 is ContentLookupResult.Available -> LessonContent(
                     lesson = result.lesson,
                     onPlayAudio = { viewModel.audioManager.play(it) },
+                    onSpeak = { viewModel.speakText(it) },
                     onFinish = {
                         viewModel.markCompleted()
                         onTakeQuiz()
@@ -70,13 +73,14 @@ fun LessonViewerScreen(
 private fun LessonContent(
     lesson: com.hackx.ruraledtech.domain.model.Lesson,
     onPlayAudio: (String) -> Unit,
+    onSpeak: (String) -> Unit,
     onFinish: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().padding(20.dp)) {
         Text(lesson.title, style = MaterialTheme.typography.headlineMedium)
         LazyColumn(modifier = Modifier.weight(1f).padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            items(lesson.blocks) { block -> ContentBlockView(block, onPlayAudio) }
+            items(lesson.blocks) { block -> ContentBlockView(block, onPlayAudio, onSpeak) }
         }
         Button(onClick = onFinish, modifier = Modifier.fillMaxWidth().height(56.dp)) {
             Text("Take the quiz", style = MaterialTheme.typography.titleMedium)
@@ -85,9 +89,14 @@ private fun LessonContent(
 }
 
 @Composable
-private fun ContentBlockView(block: ContentBlock, onPlayAudio: (String) -> Unit) {
+private fun ContentBlockView(block: ContentBlock, onPlayAudio: (String) -> Unit, onSpeak: (String) -> Unit) {
     when (block) {
-        is ContentBlock.Text -> Text(block.body, style = MaterialTheme.typography.bodyLarge)
+        is ContentBlock.Text -> Row(verticalAlignment = Alignment.Top) {
+            Text(block.body, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+            IconButton(onClick = { onSpeak(block.body) }) {
+                Icon(Icons.Filled.VolumeUp, contentDescription = "Listen")
+            }
+        }
         is ContentBlock.Audio -> Card {
             Row(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                 IconButton(onClick = { onPlayAudio(block.assetPath) }) {
@@ -98,9 +107,14 @@ private fun ContentBlockView(block: ContentBlock, onPlayAudio: (String) -> Unit)
         }
         is ContentBlock.Image -> Card { Text(block.altText, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium) }
         is ContentBlock.Example -> Card {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(block.prompt, style = MaterialTheme.typography.titleSmall)
-                Text(block.explanation, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+            Row(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(block.prompt, style = MaterialTheme.typography.titleSmall)
+                    Text(block.explanation, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 4.dp))
+                }
+                IconButton(onClick = { onSpeak("${block.prompt}. ${block.explanation}") }) {
+                    Icon(Icons.Filled.VolumeUp, contentDescription = "Listen")
+                }
             }
         }
         is ContentBlock.Callout -> Card {

@@ -6,9 +6,11 @@ import android.util.Log
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 
-class NearbyConnectionManagerImpl(
-    private val context: Context,
-    private val listener: ConnectionListener
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+
+class NearbyConnectionManagerImpl @Inject constructor(
+    @ApplicationContext private val context: Context
 ) : P2PConnectionManager {
 
     private val connectionsClient = Nearby.getConnectionsClient(context)
@@ -17,16 +19,23 @@ class NearbyConnectionManagerImpl(
     
     private val TAG = "NearbyTransport"
 
+    private val incomingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload>()
+    private var listener: ConnectionListener? = null
+
+    override fun setListener(listener: ConnectionListener) {
+        this.listener = listener
+    }
+
     // 1. DISCOVERY CALLBACKS
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
             Log.d(TAG, "Peer discovered: $endpointId (${info.endpointName})")
-            listener.onPeerDiscovered(endpointId, info.endpointName)
+            listener?.onPeerDiscovered(endpointId, info.endpointName)
         }
 
         override fun onEndpointLost(endpointId: String) {
             Log.d(TAG, "Peer lost: $endpointId")
-            listener.onPeerLost(endpointId)
+            listener?.onPeerLost(endpointId)
         }
     }
 
@@ -34,31 +43,29 @@ class NearbyConnectionManagerImpl(
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
             Log.d(TAG, "Connection initiated with: $endpointId. Auth token: ${info.authenticationToken}")
-            listener.onConnectionInitiated(endpointId, info.endpointName, info.authenticationToken)
+            listener?.onConnectionInitiated(endpointId, info.endpointName, info.authenticationToken)
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
             when (result.status.statusCode) {
-                ConnectionsStatusCodes.STATUS_OK -> listener.onConnectionAccepted(endpointId)
-                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> listener.onConnectionRejected(endpointId)
-                else -> listener.onDisconnected(endpointId)
+                ConnectionsStatusCodes.STATUS_OK -> listener?.onConnectionAccepted(endpointId)
+                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> listener?.onConnectionRejected(endpointId)
+                else -> listener?.onDisconnected(endpointId)
             }
         }
 
         override fun onDisconnected(endpointId: String) {
             Log.d(TAG, "Disconnected from: $endpointId")
-            listener.onDisconnected(endpointId)
+            listener?.onDisconnected(endpointId)
         }
     }
-
-    private val incomingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload>()
 
     // 3. PAYLOAD CALLBACKS (Data Transfer)
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             when (payload.type) {
                 Payload.Type.BYTES -> {
-                    payload.asBytes()?.let { listener.onBytesReceived(endpointId, it) }
+                    payload.asBytes()?.let { listener?.onBytesReceived(endpointId, it) }
                 }
                 Payload.Type.FILE -> {
                     Log.d(TAG, "Incoming file payload detected: ${payload.id}")
@@ -73,16 +80,21 @@ class NearbyConnectionManagerImpl(
                     val progress = if (update.totalBytes > 0) {
                         ((update.bytesTransferred.toFloat() / update.totalBytes) * 100).toInt()
                     } else 0
-                    listener.onFileTransferProgress(endpointId, update.payloadId, progress)
+                    listener?.onFileTransferProgress(endpointId, update.payloadId, progress)
                 }
                 PayloadTransferUpdate.Status.SUCCESS -> {
                     val payload = incomingFilePayloads.remove(update.payloadId)
                     val file = payload?.asFile()?.asJavaFile() ?: java.io.File(context.cacheDir, "payload_${update.payloadId}.pkg")
-                    listener.onFileTransferComplete(endpointId, update.payloadId, file)
+                    if (file.exists()) {
+                        listener?.onFileTransferComplete(endpointId, update.payloadId, file)
+                    } else {
+                        Log.e(TAG, "Transfer success but file payload missing or invalid: ${update.payloadId}")
+                        listener?.onFileTransferFailed(endpointId, update.payloadId)
+                    }
                 }
                 PayloadTransferUpdate.Status.FAILURE, PayloadTransferUpdate.Status.CANCELED -> {
                     incomingFilePayloads.remove(update.payloadId)
-                    listener.onFileTransferFailed(endpointId, update.payloadId)
+                    listener?.onFileTransferFailed(endpointId, update.payloadId)
                 }
             }
         }

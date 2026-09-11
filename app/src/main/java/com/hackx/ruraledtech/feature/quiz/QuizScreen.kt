@@ -8,8 +8,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -41,6 +45,7 @@ fun QuizScreen(
                 state = s,
                 onSelectOption = viewModel::selectOption,
                 onSubmit = viewModel::submitCurrentAnswer,
+                onReadAloud = { viewModel.readQuestionAloud(s.questions[s.currentIndex]) },
                 modifier = Modifier.padding(padding),
             )
             is QuizScreenState.Completed -> QuizResultView(s, onQuizComplete, Modifier.padding(padding))
@@ -53,6 +58,7 @@ private fun QuizQuestionView(
     state: QuizScreenState.Ready,
     onSelectOption: (String) -> Unit,
     onSubmit: () -> Unit,
+    onReadAloud: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val question = state.questions[state.currentIndex]
@@ -66,7 +72,12 @@ private fun QuizQuestionView(
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
         )
-        Text(question.prompt, style = MaterialTheme.typography.headlineSmall)
+        Row(verticalAlignment = Alignment.Top) {
+            Text(question.prompt, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+            IconButton(onClick = onReadAloud) {
+                Icon(Icons.Filled.VolumeUp, contentDescription = "Read question aloud")
+            }
+        }
 
         Column(modifier = Modifier.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             question.options.forEach { option ->
@@ -88,7 +99,7 @@ private fun QuizQuestionView(
         Button(
             onClick = onSubmit,
             enabled = state.selectedOptionId != null,
-            modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 24.dp),
+            modifier = Modifier.padding(top = 24.dp).fillMaxWidth().height(56.dp),
         ) {
             Text(if (state.currentIndex == state.questions.size - 1) "Finish" else "Next", style = MaterialTheme.typography.titleMedium)
         }
@@ -129,7 +140,7 @@ private fun QuizResultView(state: QuizScreenState.Completed, onDone: () -> Unit,
             )
         }
 
-        Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 32.dp)) {
+        Button(onClick = onDone, modifier = Modifier.padding(top = 32.dp).fillMaxWidth().height(56.dp)) {
             Text("Continue", style = MaterialTheme.typography.titleMedium)
         }
     }

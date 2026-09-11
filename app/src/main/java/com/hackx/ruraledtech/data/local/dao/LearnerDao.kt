@@ -14,6 +14,11 @@ interface LearnerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(learner: LearnerEntity)
 
+    /** Alias for [insert] (REPLACE already gives upsert semantics) — matches the naming
+     * every other DAO in this codebase uses (ContentPackageDao, MasteryDao, ProgressDao). */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(learner: LearnerEntity)
+
     @Update
     suspend fun update(learner: LearnerEntity)
 

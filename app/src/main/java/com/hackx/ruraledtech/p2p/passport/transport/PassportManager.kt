@@ -61,7 +61,7 @@ class PassportManager(
             val rawJson = json.encodeToString(LearnerExportData.serializer(), exportData)
 
             Log.d(TAG, "Encrypting with user-provided PIN...")
-            val (encryptedPayload, iv) = PassportCrypto.encrypt(rawJson, pin)
+            val (encryptedPayload, iv, salt) = PassportCrypto.encrypt(rawJson, pin)
 
             val passport = LearningPassport(
                 passportId = UUID.randomUUID().toString(),
@@ -69,7 +69,8 @@ class PassportManager(
                 version = 1,
                 timestamp = System.currentTimeMillis(),
                 encryptedPayload = encryptedPayload,
-                iv = iv
+                iv = iv,
+                salt = salt
             )
 
             Log.d(TAG, "Sending encrypted passport over mesh to $endpointId...")
@@ -88,7 +89,7 @@ class PassportManager(
      */
     suspend fun importPassport(passport: LearningPassport, pin: String): PassportImportResult {
         Log.d(TAG, "Attempting decryption of passport ${passport.passportId}...")
-        val decryptedJson = PassportCrypto.decrypt(passport.encryptedPayload, passport.iv, pin)
+        val decryptedJson = PassportCrypto.decrypt(passport.encryptedPayload, passport.iv, passport.salt, pin)
             ?: run {
                 Log.e(TAG, "Decryption failed. Invalid PIN entered.")
                 return PassportImportResult.InvalidPin

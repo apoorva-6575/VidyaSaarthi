@@ -53,6 +53,7 @@ sealed interface P2PMessage {
         override val timestamp: Long,
         val transferId: String,
         val packageId: String,
+        val version: Int = 1,
     ) : P2PMessage
 
     @Serializable

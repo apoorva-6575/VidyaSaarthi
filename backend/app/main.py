@@ -9,18 +9,43 @@ app = FastAPI(
     version="1.0.0"
 )
 
+from app.core.config import settings
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
 
+@app.on_event("startup")
+def startup_event():
+    from app.core.minio_client import ensure_buckets
+    ensure_buckets()
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "database": "ok", "storage": "ok"}
+    status = {"status": "ok", "database": "ok", "storage": "ok"}
+    try:
+        from app.db.session import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        status["database"] = f"error: {str(e)}"
+        status["status"] = "error"
+        
+    try:
+        from app.core.minio_client import minio_client, CONTENT_BUCKET
+        minio_client.bucket_exists(CONTENT_BUCKET)
+    except Exception as e:
+        status["storage"] = f"error: {str(e)}"
+        status["status"] = "error"
+        
+    return status
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(sync.router, prefix="/api/v1/sync", tags=["Sync"])

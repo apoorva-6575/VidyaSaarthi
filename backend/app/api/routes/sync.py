@@ -22,7 +22,7 @@ def sync_events(sync_req: SyncRequest, db: Session = Depends(get_db)):
             duplicate += 1
             continue
             
-        new_event = LearningEvent(  # type: ignore
+        new_event = LearningEvent(  
             id=event_data.event_id,
             learner_id=event_data.learner_id,
             device_id=event_data.device_id,

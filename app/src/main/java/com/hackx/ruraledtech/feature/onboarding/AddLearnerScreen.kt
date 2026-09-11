@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.hackx.ruraledtech.feature.common.SupportedLanguage
 
 @Composable
 fun AddLearnerScreen(
@@ -61,10 +62,22 @@ fun AddLearnerScreen(
                 }
             }
 
+            Text("Language", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 24.dp, bottom = 8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SupportedLanguage.entries.forEach { language ->
+                    val selected = state.language == language
+                    if (selected) {
+                        Button(onClick = { viewModel.onLanguageChanged(language) }) { Text(language.nativeName) }
+                    } else {
+                        OutlinedButton(onClick = { viewModel.onLanguageChanged(language) }) { Text(language.nativeName) }
+                    }
+                }
+            }
+
             Button(
                 onClick = { viewModel.submit(onLearnerCreated) },
                 enabled = !state.submitting,
-                modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 32.dp),
+                modifier = Modifier.padding(top = 32.dp).fillMaxWidth().height(56.dp),
             ) {
                 Text(if (state.submitting) "Creating..." else "Start Learning", style = MaterialTheme.typography.titleMedium)
             }

@@ -14,3 +14,6 @@ val WeakConcept = Color(0xFFD84315)
 val ProficientConcept = Color(0xFF2E7D32)
 val MasteredConcept = Color(0xFF1565C0)
 val OfflineGray = Color(0xFF757575)
+
+val BrandBlue = Color(0xFF1565C0)
+val BrandBlueDark = Color(0xFF0D47A1)

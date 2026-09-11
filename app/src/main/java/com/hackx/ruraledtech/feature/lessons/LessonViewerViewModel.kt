@@ -6,8 +6,10 @@ import androidx.lifecycle.viewModelScope
 import com.hackx.ruraledtech.core.audio.AudioManager
 import com.hackx.ruraledtech.core.session.CurrentLearnerManager
 import com.hackx.ruraledtech.domain.model.ContentLookupResult
+import com.hackx.ruraledtech.domain.repository.LearnerRepository
 import com.hackx.ruraledtech.domain.usecase.content.GetLessonUseCase
 import com.hackx.ruraledtech.domain.usecase.progress.UpdateLessonProgressUseCase
+import com.hackx.ruraledtech.domain.voice.TextToSpeechEngine
 import com.hackx.ruraledtech.feature.common.UiState
 import com.hackx.ruraledtech.feature.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,6 +24,8 @@ class LessonViewerViewModel @Inject constructor(
     private val getLessonUseCase: GetLessonUseCase,
     private val updateLessonProgressUseCase: UpdateLessonProgressUseCase,
     private val currentLearnerManager: CurrentLearnerManager,
+    private val learnerRepository: LearnerRepository,
+    private val textToSpeechEngine: TextToSpeechEngine,
     val audioManager: AudioManager,
 ) : ViewModel() {
 
@@ -50,7 +54,19 @@ class LessonViewerViewModel @Inject constructor(
         viewModelScope.launch { updateLessonProgressUseCase(learnerId, lessonId, 1f, completed = true, lastPosition = 0) }
     }
 
+    /** Reads a text block aloud in the current learner's own language via offline TTS (PS section 25/26). */
+    fun speakText(text: String) {
+        viewModelScope.launch {
+            val learnerId = currentLearnerManager.currentLearnerId.value ?: return@launch
+            val languageTag = learnerRepository.getLearner(learnerId)?.preferredLanguage ?: "en"
+            textToSpeechEngine.speak(text, languageTag)
+        }
+    }
+
     override fun onCleared() {
         audioManager.release()
+        // stop() only wraps a quick synchronous Android TTS call; runBlocking is fine here
+        // since viewModelScope may already be cancelling by the time onCleared runs.
+        kotlinx.coroutines.runBlocking { textToSpeechEngine.stop() }
     }
 }

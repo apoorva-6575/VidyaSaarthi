@@ -7,11 +7,11 @@ import com.hackx.ruraledtech.p2p.connection.P2PConnectionManager
 import com.hackx.ruraledtech.p2p.manifest.ContentManifest
 import com.hackx.ruraledtech.p2p.manifest.ManifestReconciler
 import com.hackx.ruraledtech.p2p.manifest.PackageDescriptor
+import com.hackx.ruraledtech.p2p.passport.transport.PassportManager
 import com.hackx.ruraledtech.p2p.protocol.P2PMessage
 import com.hackx.ruraledtech.p2p.protocol.ProtocolSerializer
 import com.hackx.ruraledtech.p2p.storage.PackageStorageManager
 import com.hackx.ruraledtech.p2p.transfer.TransferManager
-import com.hackx.ruraledtech.p2p.passport.transport.PassportManager
 import java.io.File
 import java.util.UUID
 
@@ -20,13 +20,36 @@ class MeshController(
     private val reconciler: ManifestReconciler,
     private val transferManager: TransferManager? = null,
     private val packageStorageManager: PackageStorageManager? = null,
-    private val passportManager: PassportManager? = null,
+    private var passportManager: PassportManager? = null,
     private val deviceId: String = UUID.randomUUID().toString()
 ) : ConnectionListener {
 
     private val TAG = "MeshController"
 
     private var localManifest = ContentManifest(deviceId, 1, emptyList())
+    private val connectedEndpoints = mutableSetOf<String>()
+
+    init {
+        transferManager?.onPackageInstalled = { packageId, version ->
+            Log.d(TAG, "Package $packageId v$version installed. Updating manifest for Store-and-Forward.")
+            val zipFile = packageStorageManager?.getPackageZipFile(packageId)
+            val checksum = if (zipFile != null && zipFile.exists()) packageStorageManager.computeSha256(zipFile) else "installed_package_hash"
+            val sizeBytes = zipFile?.length() ?: 0L
+
+            val updatedPackages = localManifest.packages.filterNot { it.packageId == packageId } +
+                PackageDescriptor(packageId, version, checksum, sizeBytes)
+
+            localManifest = localManifest.copy(
+                protocolVersion = localManifest.protocolVersion + 1,
+                packages = updatedPackages
+            )
+            broadcastLocalManifest()
+        }
+    }
+
+    fun setPassportManager(pm: PassportManager) {
+        this.passportManager = pm
+    }
 
     fun updateLocalManifest(manifest: ContentManifest) {
         localManifest = manifest
@@ -45,19 +68,31 @@ class MeshController(
     }
 
     override fun onConnectionInitiated(endpointId: String, endpointName: String, authToken: String) {
-        Log.d(TAG, "Connection initiated with $endpointId. Auto-accepting.")
+        Log.d(TAG, "Connection initiated with $endpointId ($endpointName). Auto-accepting.")
         connectionManager.acceptConnection(endpointId)
     }
 
     override fun onConnectionAccepted(endpointId: String) {
         Log.d(TAG, "Connection accepted with $endpointId. Sending local manifest.")
+        connectedEndpoints.add(endpointId)
+        broadcastLocalManifest(endpointId)
+    }
+
+    private fun broadcastLocalManifest(endpointId: String? = null) {
         val manifestMsg = P2PMessage.Manifest(
             messageId = UUID.randomUUID().toString(),
             senderDeviceId = deviceId,
             timestamp = System.currentTimeMillis(),
             manifest = localManifest
         )
-        connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(manifestMsg))
+        val payload = ProtocolSerializer.serialize(manifestMsg)
+
+        if (endpointId != null) {
+            connectionManager.sendBytes(endpointId, payload)
+        } else {
+            Log.d(TAG, "Manifest updated. Broadcasting to all ${connectedEndpoints.size} connected peers.")
+            connectedEndpoints.forEach { connectionManager.sendBytes(it, payload) }
+        }
     }
 
     override fun onConnectionRejected(endpointId: String) {
@@ -66,6 +101,7 @@ class MeshController(
 
     override fun onDisconnected(endpointId: String) {
         Log.d(TAG, "Disconnected from $endpointId")
+        connectedEndpoints.remove(endpointId)
     }
 
     // --- PROTOCOL ROUTING ---
@@ -94,7 +130,6 @@ class MeshController(
         Log.d(TAG, "Reconciling remote manifest from ${remoteManifest.deviceId}")
         val result = reconciler.reconcile(localManifest, remoteManifest)
 
-        // Request content packages we lack or have older versions of
         result.toRequest.forEach { pkg ->
             Log.d(TAG, "Sending REQUEST for ${pkg.packageId} v${pkg.version} to $endpointId")
             val req = P2PMessage.Request(
@@ -107,7 +142,6 @@ class MeshController(
             connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(req))
         }
 
-        // Offer content packages peer lacks
         result.toOffer.forEach { pkg ->
             val zipFile = packageStorageManager?.getPackageZipFile(pkg.packageId)
             if (zipFile != null && zipFile.exists()) {
@@ -198,7 +232,8 @@ class MeshController(
                 senderDeviceId = deviceId,
                 timestamp = System.currentTimeMillis(),
                 transferId = offer.transferId,
-                packageId = offer.packageId
+                packageId = offer.packageId,
+                version = offer.version
             )
             connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(acceptMsg))
         }
@@ -214,6 +249,19 @@ class MeshController(
         }
     }
 
+    fun broadcastRequest(packageId: String, version: Int) {
+        val req = P2PMessage.Request(
+            messageId = UUID.randomUUID().toString(),
+            senderDeviceId = deviceId,
+            timestamp = System.currentTimeMillis(),
+            packageId = packageId,
+            version = version
+        )
+        val payload = ProtocolSerializer.serialize(req)
+        Log.d(TAG, "Broadcasting REQUEST for $packageId v$version to ${connectedEndpoints.size} peers.")
+        connectedEndpoints.forEach { connectionManager.sendBytes(it, payload) }
+    }
+
     // --- FILE TRANSFER CALLBACKS ---
 
     override fun onFileTransferProgress(endpointId: String, payloadId: Long, progressPercent: Int) {
@@ -223,7 +271,6 @@ class MeshController(
     override fun onFileTransferComplete(endpointId: String, payloadId: Long, file: File) {
         Log.d(TAG, "File transfer COMPLETE from $endpointId (payload $payloadId). Handing off to TransferManager.")
         transferManager?.onFileTransferComplete(endpointId, payloadId, file) { packageId, version, checksum ->
-            // Store-and-Forward: Update local manifest to include newly installed package!
             val updatedPackages = localManifest.packages.filterNot { it.packageId == packageId } +
                 PackageDescriptor(packageId = packageId, version = version, checksum = checksum, sizeBytes = file.length())
             localManifest = localManifest.copy(packages = updatedPackages)
@@ -233,5 +280,6 @@ class MeshController(
 
     override fun onFileTransferFailed(endpointId: String, payloadId: Long) {
         Log.e(TAG, "File transfer FAILED from $endpointId (payload $payloadId)")
+        transferManager?.onFileTransferFailed(payloadId)
     }
 }

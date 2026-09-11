@@ -34,6 +34,8 @@ class TransferManager(
 ) {
     private val TAG = "TransferManager"
 
+    var onPackageInstalled: ((String, Int) -> Unit)? = null
+
     private val pendingTransfersByTransferId = ConcurrentHashMap<String, PendingTransfer>()
     private val transferIdByPayloadId = ConcurrentHashMap<Long, String>()
 
@@ -95,7 +97,6 @@ class TransferManager(
             }
         }
 
-        // Fallback: find single pending transfer for this endpoint without payloadId assigned
         val candidate = pendingTransfersByTransferId.values.firstOrNull {
             it.endpointId == endpointId && it.nearbyPayloadId == null
         }
@@ -159,7 +160,6 @@ class TransferManager(
             // Persist ZIP for store-and-forward
             packageStorageManager?.savePackageZip(transfer.packageId, tempFile)
 
-            // Extract ZIP if tempFile is an archive, or use directly if directory
             val installDir = if (tempFile.name.endsWith(".zip", ignoreCase = true) || isZipArchive(tempFile)) {
                 val targetDir = File(tempFile.parentFile, "extracted_${transfer.packageId}_${System.currentTimeMillis()}")
                 val extracted = packageStorageManager?.extractZip(tempFile, targetDir) ?: extractZipDirect(tempFile, targetDir)
@@ -173,10 +173,19 @@ class TransferManager(
             if (installedSuccessfully) {
                 Log.d(TAG, "Package ${transfer.packageId} installed successfully into Room database!")
                 onSuccess?.invoke(transfer.packageId, transfer.version, transfer.expectedHash)
+                onPackageInstalled?.invoke(transfer.packageId, transfer.version)
             } else {
                 Log.e(TAG, "ContentInstaller failed to install package ${transfer.packageId}")
             }
         }
+    }
+
+    fun onFileTransferFailed(payloadId: Long) {
+        val transferId = transferIdByPayloadId.remove(payloadId)
+        if (transferId != null) {
+            pendingTransfersByTransferId.remove(transferId)
+        }
+        Log.d(TAG, "Transfer failed for payload $payloadId. Cleaned up expected file tracking.")
     }
 
     private suspend fun performInstall(packagePath: String): Boolean {

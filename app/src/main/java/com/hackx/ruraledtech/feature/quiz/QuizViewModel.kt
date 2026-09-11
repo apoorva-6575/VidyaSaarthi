@@ -5,9 +5,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hackx.ruraledtech.core.session.CurrentLearnerManager
 import com.hackx.ruraledtech.domain.model.Question
+import com.hackx.ruraledtech.domain.repository.LearnerRepository
 import com.hackx.ruraledtech.domain.usecase.quiz.GetQuestionsForLessonUseCase
 import com.hackx.ruraledtech.domain.usecase.quiz.QuizAttemptOutcome
 import com.hackx.ruraledtech.domain.usecase.quiz.SubmitQuizAttemptUseCase
+import com.hackx.ruraledtech.domain.voice.TextToSpeechEngine
 import com.hackx.ruraledtech.feature.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +37,8 @@ class QuizViewModel @Inject constructor(
     private val getQuestionsForLessonUseCase: GetQuestionsForLessonUseCase,
     private val submitQuizAttemptUseCase: SubmitQuizAttemptUseCase,
     private val currentLearnerManager: CurrentLearnerManager,
+    private val learnerRepository: LearnerRepository,
+    private val textToSpeechEngine: TextToSpeechEngine,
 ) : ViewModel() {
 
     private val lessonId: String = checkNotNull(savedStateHandle[Routes.ARG_LESSON_ID])
@@ -56,6 +60,16 @@ class QuizViewModel @Inject constructor(
     fun selectOption(optionId: String) {
         val current = _state.value as? QuizScreenState.Ready ?: return
         _state.value = current.copy(selectedOptionId = optionId)
+    }
+
+    /** "Read question" for low-literacy support (PS section 25/26) — offline TTS in the learner's own language. */
+    fun readQuestionAloud(question: Question) {
+        viewModelScope.launch {
+            val learnerId = currentLearnerManager.currentLearnerId.value ?: return@launch
+            val languageTag = learnerRepository.getLearner(learnerId)?.preferredLanguage ?: question.language
+            val optionsText = question.options.joinToString(". ") { it.text }
+            textToSpeechEngine.speak("${question.prompt}. Options: $optionsText", languageTag)
+        }
     }
 
     fun submitCurrentAnswer() {
@@ -84,5 +98,9 @@ class QuizViewModel @Inject constructor(
                 QuizScreenState.Ready(current.questions, nextIndex, null, newOutcomes, System.currentTimeMillis())
             }
         }
+    }
+
+    override fun onCleared() {
+        kotlinx.coroutines.runBlocking { textToSpeechEngine.stop() }
     }
 }
