@@ -63,4 +63,7 @@ object DatabaseModule {
     
     @Provides
     fun provideClassGroupDao(db: AppDatabase): com.hackx.ruraledtech.data.local.dao.ClassGroupDao = db.classGroupDao()
+
+    @Provides
+    fun provideTeacherCacheDao(db: AppDatabase): com.hackx.ruraledtech.data.local.dao.TeacherCacheDao = db.teacherCacheDao()
 }
