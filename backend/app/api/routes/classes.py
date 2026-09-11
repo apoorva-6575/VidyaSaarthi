@@ -19,7 +19,7 @@ def get_classes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), 
 @router.post("/", response_model=ClassGroupResponse)
 def create_class(class_in: ClassGroupCreate, db: Session = Depends(get_db), current_teacher: Teacher = Depends(get_current_teacher)):
     class_id = str(uuid.uuid4())
-    db_class = ClassGroup(  # type: ignore
+    db_class = ClassGroup(  
         id=class_id,
         name=class_in.name,
         grade=class_in.grade,

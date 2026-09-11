@@ -37,7 +37,7 @@ def create_learner(learner_in: LearnerCreate, db: Session = Depends(get_db), cur
     if existing:
         return existing
         
-    db_learner = Learner( # type: ignore
+    db_learner = Learner(
         id=learner_in.id,
         name=learner_in.name,
         grade=learner_in.grade,
