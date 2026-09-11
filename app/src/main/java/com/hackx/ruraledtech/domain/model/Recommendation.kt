@@ -17,4 +17,5 @@ enum class RecommendationType { REMEDIATION, PRACTICE, NEXT_CONCEPT, ADVANCED }
 data class LearningResult(
     val updatedMastery: Mastery,
     val recommendation: Recommendation?,
+    val contentRequirements: List<ContentRequirement> = emptyList(),
 )
