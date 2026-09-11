@@ -28,13 +28,22 @@ class PreferencesManager @Inject constructor(
         val ONBOARDING_COMPLETE = booleanPreferencesKey("onboarding_complete")
         val LARGE_TEXT = booleanPreferencesKey("accessibility_large_text")
         val AUDIO_NAV_ENABLED = booleanPreferencesKey("accessibility_audio_nav")
+        val USER_ROLE = stringPreferencesKey("user_role")
     }
 
+    /** "student" or "teacher", or null before the role picker has been shown. */
+    val userRole: Flow<String?> = context.dataStore.data.map { it[Keys.USER_ROLE] }
     val currentLearnerId: Flow<String?> = context.dataStore.data.map { it[Keys.CURRENT_LEARNER_ID] }
     val uiLanguage: Flow<String> = context.dataStore.data.map { it[Keys.UI_LANGUAGE] ?: "en" }
     val onboardingComplete: Flow<Boolean> = context.dataStore.data.map { it[Keys.ONBOARDING_COMPLETE] ?: false }
     val largeTextEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.LARGE_TEXT] ?: false }
     val audioNavEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.AUDIO_NAV_ENABLED] ?: true }
+
+    suspend fun setUserRole(role: String?) {
+        context.dataStore.edit {
+            if (role == null) it.remove(Keys.USER_ROLE) else it[Keys.USER_ROLE] = role
+        }
+    }
 
     suspend fun setCurrentLearnerId(learnerId: String?) {
         context.dataStore.edit {

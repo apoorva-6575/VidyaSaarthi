@@ -16,10 +16,13 @@ import com.hackx.ruraledtech.feature.lessons.LessonViewerScreen
 import com.hackx.ruraledtech.feature.lessons.SubjectListScreen
 import com.hackx.ruraledtech.feature.onboarding.AddLearnerScreen
 import com.hackx.ruraledtech.feature.onboarding.LanguageSelectionScreen
+import com.hackx.ruraledtech.feature.onboarding.RoleSelectionScreen
+import com.hackx.ruraledtech.feature.onboarding.UserRole
 import com.hackx.ruraledtech.feature.profile.ProfileScreen
 import com.hackx.ruraledtech.feature.progress.ProgressScreen
 import com.hackx.ruraledtech.feature.quiz.QuizScreen
 import com.hackx.ruraledtech.feature.splash.SplashScreen
+import com.hackx.ruraledtech.feature.teacher.TeacherHomeScreen
 
 /**
  * The full learner journey (PS section 24/56/57) lives in this single graph. Nothing here
@@ -37,6 +40,21 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 },
+            )
+        }
+
+        composable(Routes.ROLE_SELECTION) {
+            RoleSelectionScreen(
+                onRoleSelected = { role ->
+                    val destination = if (role == UserRole.TEACHER) Routes.TEACHER_HOME else Routes.LANGUAGE_SELECTION
+                    navController.navigate(destination) { popUpTo(Routes.ROLE_SELECTION) { inclusive = true } }
+                },
+            )
+        }
+
+        composable(Routes.TEACHER_HOME) {
+            TeacherHomeScreen(
+                onSwitchToStudent = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
             )
         }
 

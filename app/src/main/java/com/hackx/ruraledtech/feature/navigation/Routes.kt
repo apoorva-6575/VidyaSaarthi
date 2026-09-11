@@ -2,6 +2,8 @@ package com.hackx.ruraledtech.feature.navigation
 
 object Routes {
     const val SPLASH = "splash"
+    const val ROLE_SELECTION = "onboarding/role"
+    const val TEACHER_HOME = "teacher_home"
     const val LANGUAGE_SELECTION = "onboarding/language"
     const val ADD_LEARNER = "onboarding/add_learner"
     const val LEARNER_SELECTION = "learner_selection"

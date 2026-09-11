@@ -23,11 +23,14 @@ class SplashViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            val userRole = preferencesManager.userRole.first()
             val onboardingComplete = preferencesManager.onboardingComplete.first()
             val currentLearnerId = currentLearnerManager.currentLearnerId.value
                 ?: preferencesManager.currentLearnerId.first()
 
             _startDestination.value = when {
+                userRole == null -> Routes.ROLE_SELECTION
+                userRole == "teacher" -> Routes.TEACHER_HOME
                 !onboardingComplete -> Routes.LANGUAGE_SELECTION
                 currentLearnerId == null -> Routes.LEARNER_SELECTION
                 else -> Routes.HOME

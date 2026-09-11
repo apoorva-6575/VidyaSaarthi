@@ -64,7 +64,7 @@ fun AddLearnerScreen(
             Button(
                 onClick = { viewModel.submit(onLearnerCreated) },
                 enabled = !state.submitting,
-                modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 32.dp),
+                modifier = Modifier.padding(top = 32.dp).fillMaxWidth().height(56.dp),
             ) {
                 Text(if (state.submitting) "Creating..." else "Start Learning", style = MaterialTheme.typography.titleMedium)
             }

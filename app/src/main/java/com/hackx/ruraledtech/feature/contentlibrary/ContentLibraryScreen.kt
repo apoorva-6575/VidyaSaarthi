@@ -1,5 +1,7 @@
 package com.hackx.ruraledtech.feature.contentlibrary
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,10 +20,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.hackx.ruraledtech.core.permissions.P2PPermissions
 import com.hackx.ruraledtech.feature.common.EmptyState
 import com.hackx.ruraledtech.p2p.mesh.MeshState
 import com.hackx.ruraledtech.p2p.mesh.TransferState
@@ -33,12 +37,17 @@ fun ContentLibraryScreen(viewModel: ContentLibraryViewModel = hiltViewModel()) {
     val meshState by viewModel.meshState.collectAsState()
     val transfers by viewModel.transfers.collectAsState()
 
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        if (grants.values.all { it }) viewModel.findNearbyDevice()
+    }
+    val onFindNearbyDevice = remember { { permissionLauncher.launch(P2PPermissions.required) } }
+
     Scaffold { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { LearningMeshCard(meshState, transfers, onFindNearbyDevice = viewModel::findNearbyDevice) }
+            item { LearningMeshCard(meshState, transfers, onFindNearbyDevice = onFindNearbyDevice) }
 
             if (packages.isEmpty()) {
                 item {

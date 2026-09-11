@@ -88,7 +88,7 @@ private fun QuizQuestionView(
         Button(
             onClick = onSubmit,
             enabled = state.selectedOptionId != null,
-            modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 24.dp),
+            modifier = Modifier.padding(top = 24.dp).fillMaxWidth().height(56.dp),
         ) {
             Text(if (state.currentIndex == state.questions.size - 1) "Finish" else "Next", style = MaterialTheme.typography.titleMedium)
         }
@@ -129,7 +129,7 @@ private fun QuizResultView(state: QuizScreenState.Completed, onDone: () -> Unit,
             )
         }
 
-        Button(onClick = onDone, modifier = Modifier.fillMaxWidth().height(56.dp).padding(top = 32.dp)) {
+        Button(onClick = onDone, modifier = Modifier.padding(top = 32.dp).fillMaxWidth().height(56.dp)) {
             Text("Continue", style = MaterialTheme.typography.titleMedium)
         }
     }
