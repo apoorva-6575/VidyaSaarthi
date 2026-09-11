@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,7 +92,7 @@ fun HomeScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth().clickableRow(onOpenSubjects)) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Icon(Icons.Filled.MenuBook, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
                         Text("Browse all subjects", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
@@ -101,7 +101,7 @@ fun HomeScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth().clickableRow(onOpenProgress)) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Icon(Icons.Filled.TrendingUp, contentDescription = null)
+                        Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null)
                         Text("View full progress", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
