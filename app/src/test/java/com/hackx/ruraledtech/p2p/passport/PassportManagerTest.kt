@@ -75,6 +75,7 @@ class PassportManagerTest {
             timestamp = 1000L,
             encryptedPayload = "encrypted",
             iv = "iv_str",
+            salt = "salt_str",
         )
 
         assertThat(passportManager.pendingPassport.value).isNull()
@@ -97,7 +98,7 @@ class PassportManagerTest {
             exportedAt = 1000L,
         )
         val plainJson = json.encodeToString(LearnerExportData.serializer(), exportData)
-        val (encrypted, iv) = PassportCrypto.encrypt(plainJson, pin)
+        val (encrypted, iv, salt) = PassportCrypto.encrypt(plainJson, pin)
 
         val passport = LearningPassport(
             passportId = "pass_002",
@@ -106,6 +107,7 @@ class PassportManagerTest {
             timestamp = 1000L,
             encryptedPayload = encrypted,
             iv = iv,
+            salt = salt,
         )
 
         passportManager.onPassportReceived(passport)
@@ -136,7 +138,7 @@ class PassportManagerTest {
             exportedAt = 1000L,
         )
         val plainJson = json.encodeToString(LearnerExportData.serializer(), exportData)
-        val (encrypted, iv) = PassportCrypto.encrypt(plainJson, validPin)
+        val (encrypted, iv, salt) = PassportCrypto.encrypt(plainJson, validPin)
 
         val passport = LearningPassport(
             passportId = "pass_003",
@@ -145,6 +147,7 @@ class PassportManagerTest {
             timestamp = 1000L,
             encryptedPayload = encrypted,
             iv = iv,
+            salt = salt,
         )
 
         val result = passportManager.importPassport(passport, wrongPin)
@@ -155,7 +158,7 @@ class PassportManagerTest {
     fun `importPassport with malformed payload returns MalformedPassport`() = runTest {
         val pin = "1234"
         val malformedJson = "{ invalid json structure }"
-        val (encrypted, iv) = PassportCrypto.encrypt(malformedJson, pin)
+        val (encrypted, iv, salt) = PassportCrypto.encrypt(malformedJson, pin)
 
         val passport = LearningPassport(
             passportId = "pass_004",
@@ -164,6 +167,7 @@ class PassportManagerTest {
             timestamp = 1000L,
             encryptedPayload = encrypted,
             iv = iv,
+            salt = salt,
         )
 
         val result = passportManager.importPassport(passport, pin)

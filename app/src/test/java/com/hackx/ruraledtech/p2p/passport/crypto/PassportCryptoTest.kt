@@ -1,12 +1,33 @@
 package com.hackx.ruraledtech.p2p.passport.crypto
 
+import io.mockk.mockkStatic
+import io.mockk.unmockkAll
+import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
+import android.util.Base64
 
 class PassportCryptoTest {
+
+    @Before
+    fun setUp() {
+        mockkStatic(Base64::class)
+        io.mockk.every { Base64.encodeToString(any(), any()) } answers {
+            java.util.Base64.getEncoder().encodeToString(firstArg())
+        }
+        io.mockk.every { Base64.decode(any<String>(), any()) } answers {
+            java.util.Base64.getDecoder().decode(firstArg<String>())
+        }
+    }
+
+    @After
+    fun tearDown() {
+        unmockkAll()
+    }
 
     @Test
     fun `test encryption generates unique ciphertexts and salts`() {

@@ -84,15 +84,7 @@ class SubmitQuizAttemptUseCase @Inject constructor(
 
         // Automatically dispatch missing or remedial ContentRequirements to LearningMesh for P2P acquisition
         result.contentRequirements.forEach { requirement ->
-            learningMesh?.requestContent(
-                com.hackx.ruraledtech.p2p.integration.ContentRequirement(
-                    packageId = requirement.packageId,
-                    version = null,
-                    conceptId = requirement.conceptId,
-                    priority = requirement.priority,
-                    reason = requirement.reason
-                )
-            )
+            learningMesh?.requestContent(requirement)
         }
 
         return QuizAttemptOutcome(correct = correct, learningResult = result)

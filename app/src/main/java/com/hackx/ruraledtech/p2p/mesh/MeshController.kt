@@ -33,11 +33,10 @@ class MeshController(
         transferManager?.onPackageInstalled = { packageId, version ->
             Log.d(TAG, "Package $packageId v$version installed. Updating manifest for Store-and-Forward.")
             val zipFile = packageStorageManager?.getPackageZipFile(packageId)
-            val checksum = if (zipFile != null && zipFile.exists()) packageStorageManager.computeSha256(zipFile) else "installed_package_hash"
             val sizeBytes = zipFile?.length() ?: 0L
 
             val updatedPackages = localManifest.packages.filterNot { it.packageId == packageId } +
-                PackageDescriptor(packageId, version, checksum, sizeBytes)
+                PackageDescriptor(packageId, version, "installed_package_hash", sizeBytes)
 
             localManifest = localManifest.copy(
                 protocolVersion = localManifest.protocolVersion + 1,
