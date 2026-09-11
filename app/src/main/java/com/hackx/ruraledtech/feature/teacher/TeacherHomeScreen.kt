@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -50,7 +51,7 @@ fun TeacherHomeScreen(
                     onClick = { viewModel.refreshData() },
                     enabled = !uiState.isLoading && !uiState.isOffline
                 ) {
-                    Icon(androidx.compose.material.icons.Icons.Filled.Refresh, contentDescription = "Sync Classes")
+                    Icon(Icons.Filled.Refresh, contentDescription = "Sync Classes")
                 }
             }
             
