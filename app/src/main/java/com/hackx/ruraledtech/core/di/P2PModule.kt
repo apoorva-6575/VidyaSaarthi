@@ -10,6 +10,7 @@ import com.hackx.ruraledtech.p2p.manifest.ManifestReconciler
 import com.hackx.ruraledtech.p2p.mesh.LearningMesh
 import com.hackx.ruraledtech.p2p.mesh.LearningMeshImpl
 import com.hackx.ruraledtech.p2p.mesh.MeshController
+import com.hackx.ruraledtech.p2p.storage.PackageStorageManager
 import com.hackx.ruraledtech.p2p.transfer.TransferManager
 import com.hackx.ruraledtech.domain.integration.ContentInstaller
 import com.hackx.ruraledtech.domain.integration.LearnerDataExporter
@@ -32,13 +33,30 @@ object P2PModule {
         return NearbyConnectionManagerImpl(context)
     }
 
+    /**
+     * Was never bound here before, which left every TransferManager/MeshController in
+     * production running with a null PackageStorageManager — so saved package ZIPs, real
+     * checksum lookups, and store-and-forward re-sharing silently no-op'd on-device even
+     * though the rest of the P2P pipeline works. Only tests were constructing a real one.
+     */
+    @Provides
+    @Singleton
+    fun providePackageStorageManager(@ApplicationContext context: Context): PackageStorageManager {
+        return PackageStorageManager(context)
+    }
+
     @Provides
     @Singleton
     fun provideTransferManager(
         connectionManager: P2PConnectionManager,
-        contentInstaller: ContentInstaller
+        contentInstaller: ContentInstaller,
+        packageStorageManager: PackageStorageManager,
     ): TransferManager {
-        return TransferManager(connectionManager, contentInstaller)
+        return TransferManager(
+            connectionManager = connectionManager,
+            domainContentInstaller = contentInstaller,
+            packageStorageManager = packageStorageManager,
+        )
     }
 
     @Provides
@@ -57,9 +75,15 @@ object P2PModule {
         connectionManager: P2PConnectionManager,
         reconciler: ManifestReconciler,
         transferManager: TransferManager,
-        passportManager: PassportManager
+        passportManager: PassportManager,
+        packageStorageManager: PackageStorageManager,
     ): MeshController {
-        val controller = MeshController(connectionManager, reconciler, transferManager)
+        val controller = MeshController(
+            connectionManager = connectionManager,
+            reconciler = reconciler,
+            transferManager = transferManager,
+            packageStorageManager = packageStorageManager,
+        )
         connectionManager.setListener(controller)
         controller.setPassportManager(passportManager)
         return controller

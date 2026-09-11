@@ -1,0 +1,12 @@
+{
+  "lesson_id": "lesson_decimals_intro_hi",
+  "concept_id": "decimal_basics",
+  "language": "hi",
+  "title": "दशमलव को समझना",
+  "order_index": 0,
+  "blocks": [
+    {"block_id": "b1", "type": "TEXT", "body": "एक दशमलव संख्या पूर्ण संख्याओं के बीच के मान को दर्शाती है, दशमलव बिंदु का उपयोग करके। उदाहरण के लिए, 0.5 का अर्थ है आधा, जो भिन्न 1/2 के समान है।"},
+    {"block_id": "b2", "type": "EXAMPLE", "prompt": "उदाहरण: 0.25 + 0.5", "explanation": "दशमलव बिंदुओं को पंक्तिबद्ध करें और जोड़ें: 0.25 + 0.50 = 0.75"},
+    {"block_id": "b3", "type": "CALLOUT", "message": "दशमलव बिंदु के बाद अंकों की संख्या बताती है कि मान कितना सटीक है।", "tone": "TIP"}
+  ]
+}

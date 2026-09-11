@@ -18,6 +18,7 @@ import com.hackx.ruraledtech.feature.onboarding.AddLearnerScreen
 import com.hackx.ruraledtech.feature.onboarding.LanguageSelectionScreen
 import com.hackx.ruraledtech.feature.onboarding.RoleSelectionScreen
 import com.hackx.ruraledtech.feature.onboarding.UserRole
+import com.hackx.ruraledtech.feature.passport.PassportScreen
 import com.hackx.ruraledtech.feature.profile.ProfileScreen
 import com.hackx.ruraledtech.feature.progress.ProgressScreen
 import com.hackx.ruraledtech.feature.quiz.QuizScreen
@@ -136,10 +137,13 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
                 onSwitchedProfile = { navController.navigate(Routes.LEARNER_SELECTION) { popUpTo(Routes.HOME) { inclusive = true } } },
                 onOpenAccessibility = { navController.navigate(Routes.ACCESSIBILITY_SETTINGS) },
                 onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
+                onOpenPassport = { navController.navigate(Routes.PASSPORT) },
             )
         }
 
         composable(Routes.CONTENT_LIBRARY) { ContentLibraryScreen() }
+
+        composable(Routes.PASSPORT) { PassportScreen() }
 
         composable(Routes.ACCESSIBILITY_SETTINGS) { AccessibilitySettingsScreen() }
     }

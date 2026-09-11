@@ -3,6 +3,7 @@ package com.hackx.ruraledtech.data.repository
 import com.google.common.truth.Truth.assertThat
 import com.hackx.ruraledtech.core.connectivity.ConnectivityObserver
 import com.hackx.ruraledtech.core.connectivity.ConnectivityState
+import com.hackx.ruraledtech.core.work.SyncScheduler
 import com.hackx.ruraledtech.data.local.dao.MasteryDao
 import com.hackx.ruraledtech.data.local.dao.ProgressDao
 import com.hackx.ruraledtech.data.local.dao.SyncEventDao
@@ -41,6 +42,7 @@ class SyncRepositoryImplTest {
     private val syncPrefs: SyncPreferences = mockk(relaxed = true)
     private val masteryDao: MasteryDao = mockk(relaxed = true)
     private val progressDao: ProgressDao = mockk(relaxed = true)
+    private val syncScheduler: SyncScheduler = mockk(relaxed = true)
 
     private lateinit var repository: SyncRepositoryImpl
 
@@ -48,7 +50,7 @@ class SyncRepositoryImplTest {
     fun setUp() {
         every { syncPrefs.deviceId } returns "D-1"
         every { syncPrefs.lastServerSequence } returns 0L
-        repository = SyncRepositoryImpl(syncEventDao, connectivityObserver, api, syncPrefs, masteryDao, progressDao)
+        repository = SyncRepositoryImpl(syncEventDao, connectivityObserver, api, syncPrefs, masteryDao, progressDao, syncScheduler)
     }
 
     @Test

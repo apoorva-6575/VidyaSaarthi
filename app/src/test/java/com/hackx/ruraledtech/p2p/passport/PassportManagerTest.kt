@@ -173,4 +173,26 @@ class PassportManagerTest {
         val result = passportManager.importPassport(passport, pin)
         assertThat(result).isEqualTo(PassportImportResult.MalformedPassport)
     }
+
+    @Test
+    fun `importPassport rejects a passport from a newer, unsupported version instead of attempting decryption`() = runTest {
+        val passport = LearningPassport(
+            passportId = "pass_005",
+            learnerId = "learner_42",
+            version = PassportManager.CURRENT_PASSPORT_VERSION + 1,
+            timestamp = 1000L,
+            encryptedPayload = "irrelevant-should-not-be-touched",
+            iv = "irrelevant",
+            salt = "irrelevant",
+        )
+
+        val result = passportManager.importPassport(passport, "any-pin")
+
+        assertThat(result).isEqualTo(
+            PassportImportResult.UnsupportedVersion(
+                passportVersion = PassportManager.CURRENT_PASSPORT_VERSION + 1,
+                supportedVersion = PassportManager.CURRENT_PASSPORT_VERSION,
+            ),
+        )
+    }
 }

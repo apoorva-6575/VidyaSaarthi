@@ -1,0 +1,12 @@
+{
+  "lesson_id": "lesson_watercycle_intro_en",
+  "concept_id": "water_cycle_basics",
+  "language": "en",
+  "title": "The Water Cycle",
+  "order_index": 0,
+  "blocks": [
+    {"block_id": "b1", "type": "TEXT", "body": "The water cycle describes how water moves between the sky, land, and oceans. It has three main steps: evaporation, condensation, and precipitation."},
+    {"block_id": "b2", "type": "EXAMPLE", "prompt": "Example: A puddle after rain", "explanation": "Sunlight heats the puddle, turning the water into vapor that rises into the air — this is evaporation."},
+    {"block_id": "b3", "type": "CALLOUT", "message": "Clouds form when water vapor cools and condenses into tiny droplets.", "tone": "INFO"}
+  ]
+}

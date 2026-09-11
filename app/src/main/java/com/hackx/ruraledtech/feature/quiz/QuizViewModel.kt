@@ -48,7 +48,12 @@ class QuizViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            val questions = getQuestionsForLessonUseCase(lessonId)
+            val learnerId = currentLearnerManager.currentLearnerId.value
+            val questions = if (learnerId != null) {
+                getQuestionsForLessonUseCase(lessonId, learnerId)
+            } else {
+                emptyList()
+            }
             _state.value = if (questions.isEmpty()) {
                 QuizScreenState.Error("No quiz questions are available for this lesson yet.")
             } else {

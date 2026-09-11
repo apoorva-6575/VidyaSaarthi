@@ -1,0 +1,12 @@
+{
+  "package_id": "math-grade5-decimals",
+  "version": 1,
+  "subject": "Mathematics",
+  "grade": 5,
+  "languages": ["en", "hi"],
+  "size": 3942,
+  "dependencies": [],
+  "checksum": "f2da54607dd019fcce24b93506a6425875592036f337a0be7737faafcc0bee13",
+  "created_at": "2026-09-12T00:00:00Z",
+  "priority": "normal"
+}

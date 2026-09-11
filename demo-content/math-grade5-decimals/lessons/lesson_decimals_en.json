@@ -1,0 +1,12 @@
+{
+  "lesson_id": "lesson_decimals_intro_en",
+  "concept_id": "decimal_basics",
+  "language": "en",
+  "title": "Understanding Decimals",
+  "order_index": 0,
+  "blocks": [
+    {"block_id": "b1", "type": "TEXT", "body": "A decimal number represents a value between whole numbers, using a decimal point. For example, 0.5 means half of a whole, the same as the fraction 1/2."},
+    {"block_id": "b2", "type": "EXAMPLE", "prompt": "Example: 0.25 + 0.5", "explanation": "Line up the decimal points and add: 0.25 + 0.50 = 0.75."},
+    {"block_id": "b3", "type": "CALLOUT", "message": "The number of digits after the decimal point tells you how precise the value is.", "tone": "TIP"}
+  ]
+}

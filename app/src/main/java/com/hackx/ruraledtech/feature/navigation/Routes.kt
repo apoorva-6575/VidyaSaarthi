@@ -19,6 +19,7 @@ object Routes {
     const val PROFILE = "profile"
     const val CONTENT_LIBRARY = "content_library"
     const val ACCESSIBILITY_SETTINGS = "settings/accessibility"
+    const val PASSPORT = "passport"
 
     fun lessonList(subject: String) = "subjects/$subject/lessons"
     fun lessonViewer(lessonId: String) = "lessons/$lessonId"

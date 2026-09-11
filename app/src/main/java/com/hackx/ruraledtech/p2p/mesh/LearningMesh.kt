@@ -12,4 +12,7 @@ interface LearningMesh {
     // Observability for UI
     fun observeMeshState(): Flow<MeshState>
     fun observeTransfers(): Flow<List<TransferTask>>
+
+    /** Connected peer endpoint IDs — e.g. to let the UI offer "send my passport to this device." */
+    fun observeConnectedEndpoints(): Flow<List<String>>
 }

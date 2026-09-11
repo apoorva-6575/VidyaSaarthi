@@ -6,6 +6,7 @@ import com.hackx.ruraledtech.domain.model.ContentRequirement
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 
 import javax.inject.Inject
 
@@ -57,6 +58,9 @@ class LearningMeshImpl @Inject constructor(
     override fun observeMeshState(): Flow<MeshState> = _meshState.asStateFlow()
 
     override fun observeTransfers(): Flow<List<TransferTask>> = _transfers.asStateFlow()
+
+    override fun observeConnectedEndpoints(): Flow<List<String>> =
+        meshController.connectedEndpointsFlow.map { it.toList() }
 
     // Internal helper to update states from the various managers
     fun updateMeshState(newState: MeshState) {

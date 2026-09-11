@@ -1,0 +1,12 @@
+{
+  "package_id": "science-grade5-water-cycle",
+  "version": 1,
+  "subject": "Science",
+  "grade": 5,
+  "languages": ["en", "hi"],
+  "size": 4269,
+  "dependencies": [],
+  "checksum": "2078f10a8b0048d451aeb691ae1cabeba596bcefcbc0865a540051d8864abd42",
+  "created_at": "2026-09-12T00:00:00Z",
+  "priority": "normal"
+}

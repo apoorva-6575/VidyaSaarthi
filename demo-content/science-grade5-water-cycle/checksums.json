@@ -1,0 +1,11 @@
+{
+  "files": {
+    "lessons/lesson_watercycle_en.json": "3bcc4752bda4f936898c1a0af4fbdf507cff8c5f0be756d44fb58401426592e6",
+    "lessons/lesson_watercycle_hi.json": "69abce24b1ab8d5a47c9223f57303166e33821a25479c0d769fbd01152b02432",
+    "questions/q_wc_en_1.json": "2ecb58bc78ca127ae53cd79655aac1d15502026ed8a5fa4bcbe58ec558615492",
+    "questions/q_wc_en_2.json": "bf37768dd84b67e1f697156b6b79945985d456b3d87465a5c1c45c1fff297d06",
+    "questions/q_wc_en_3.json": "7abde0266b16fd358f3d8b13a1a5749df5d588e20a758e44c303a379d9a5d7df",
+    "questions/q_wc_hi_1.json": "26a21d59cc6be9dcd64eab8396b37d9f3a643e99cb8fce2ced5fc9441e18d52c",
+    "questions/q_wc_hi_2.json": "15cf49a8d9ec93c6ffbe301327c9b0d72203c5387ed8e6aa85240412069b703b"
+  }
+}

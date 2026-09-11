@@ -13,6 +13,8 @@ import com.hackx.ruraledtech.data.local.dao.QuestionDao
 import com.hackx.ruraledtech.data.local.dao.RecommendationDao
 import com.hackx.ruraledtech.data.local.dao.SyncEventDao
 import com.hackx.ruraledtech.data.local.database.AppDatabase
+import com.hackx.ruraledtech.data.local.database.MIGRATION_1_2
+import com.hackx.ruraledtech.data.local.database.MIGRATION_2_3
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +30,8 @@ object DatabaseModule {
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
         Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .fallbackToDestructiveMigration() // safety net only — real migrations above are tried first
             .build()
 
     @Provides

@@ -18,7 +18,8 @@ class ContentUpdateWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val api: com.hackx.ruraledtech.data.remote.RuralEdTechApi,
     private val contentDao: com.hackx.ruraledtech.data.local.dao.ContentPackageDao,
-    private val contentInstaller: com.hackx.ruraledtech.p2p.integration.ContentInstaller
+    private val contentInstaller: com.hackx.ruraledtech.p2p.integration.ContentInstaller,
+    private val packageStorageManager: com.hackx.ruraledtech.p2p.storage.PackageStorageManager,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -72,7 +73,11 @@ class ContentUpdateWorker @AssistedInject constructor(
                     tempFile.delete()
                     return@withContext false
                 }
-                
+
+                // Persist the verified ZIP so this device can later re-share it P2P
+                // (store-and-forward) instead of only having it unpacked into Room.
+                packageStorageManager.savePackageZip(pkg.id, tempFile)
+
                 // Safely extract ZIP
                 extractDir = java.io.File(applicationContext.cacheDir, "pkg_extract_${pkg.id}_${pkg.version}")
                 if (extractDir.exists()) {

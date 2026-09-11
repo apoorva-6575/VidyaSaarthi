@@ -23,6 +23,7 @@ sealed class PassportImportResult {
     data class Success(val learnerId: String, val importResult: ImportResult) : PassportImportResult()
     object InvalidPin : PassportImportResult()
     object MalformedPassport : PassportImportResult()
+    data class UnsupportedVersion(val passportVersion: Int, val supportedVersion: Int) : PassportImportResult()
     data class Error(val message: String) : PassportImportResult()
 }
 
@@ -34,6 +35,17 @@ class PassportManager(
 ) {
     private val TAG = "PassportManager"
     private val json = Json { ignoreUnknownKeys = true }
+
+    companion object {
+        /**
+         * The `version` field on [LearningPassport] was previously write-only — set to 1 on
+         * export and never read back anywhere, so two devices on incompatible passport
+         * formats would silently attempt decryption/import instead of failing clearly. Bump
+         * this whenever the encrypted payload's inner schema (LearnerExportData) changes in a
+         * way older devices can't parse.
+         */
+        const val CURRENT_PASSPORT_VERSION = 1
+    }
 
     private val _pendingPassport = MutableStateFlow<LearningPassport?>(null)
     val pendingPassport: StateFlow<LearningPassport?> = _pendingPassport.asStateFlow()
@@ -66,7 +78,7 @@ class PassportManager(
             val passport = LearningPassport(
                 passportId = UUID.randomUUID().toString(),
                 learnerId = learnerId,
-                version = 1,
+                version = CURRENT_PASSPORT_VERSION,
                 timestamp = System.currentTimeMillis(),
                 encryptedPayload = encryptedPayload,
                 iv = iv,
@@ -88,6 +100,11 @@ class PassportManager(
      * Decrypts and imports passport using PIN entered by user via UI.
      */
     suspend fun importPassport(passport: LearningPassport, pin: String): PassportImportResult {
+        if (passport.version > CURRENT_PASSPORT_VERSION) {
+            Log.e(TAG, "Passport ${passport.passportId} is version ${passport.version}, this device only supports up to $CURRENT_PASSPORT_VERSION.")
+            return PassportImportResult.UnsupportedVersion(passport.version, CURRENT_PASSPORT_VERSION)
+        }
+
         Log.d(TAG, "Attempting decryption of passport ${passport.passportId}...")
         val decryptedJson = PassportCrypto.decrypt(passport.encryptedPayload, passport.iv, passport.salt, pin)
             ?: run {

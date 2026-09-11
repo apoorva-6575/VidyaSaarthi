@@ -32,6 +32,7 @@ fun ProfileScreen(
     onSwitchedProfile: () -> Unit,
     onOpenAccessibility: () -> Unit,
     onOpenContentLibrary: () -> Unit,
+    onOpenPassport: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val learner by viewModel.learner.collectAsState()
@@ -51,6 +52,9 @@ fun ProfileScreen(
                 }
                 OutlinedButton(onClick = onOpenAccessibility, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                     Text("Accessibility settings")
+                }
+                OutlinedButton(onClick = onOpenPassport, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                    Text("Learning Passport (move to another device)")
                 }
                 Button(
                     onClick = {

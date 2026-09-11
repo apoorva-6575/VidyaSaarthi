@@ -124,6 +124,22 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         )
 }
 
-class GetQuestionsForLessonUseCase @Inject constructor(private val repository: QuizRepository) {
-    suspend operator fun invoke(lessonId: String): List<Question> = repository.getQuestionsForLesson(lessonId)
+/**
+ * Question difficulty was previously static — every learner got the same question order
+ * regardless of how they were doing on the concept. Orders questions by closeness of
+ * [Question.difficulty] to the learner's current mastery score for that concept (defaulting
+ * to 0f, i.e. start easy, when there's no mastery record yet), so a struggling learner sees
+ * easier questions first and a learner who already has this concept isn't stuck re-doing
+ * trivial ones before reaching anything challenging.
+ */
+class GetQuestionsForLessonUseCase @Inject constructor(
+    private val repository: QuizRepository,
+    private val progressRepository: ProgressRepository,
+) {
+    suspend operator fun invoke(lessonId: String, learnerId: String): List<Question> {
+        val questions = repository.getQuestionsForLesson(lessonId)
+        val conceptId = questions.firstOrNull()?.conceptId ?: return questions
+        val currentMastery = progressRepository.getMastery(learnerId, conceptId)?.score ?: 0f
+        return questions.sortedBy { kotlin.math.abs(it.difficulty - currentMastery) }
+    }
 }

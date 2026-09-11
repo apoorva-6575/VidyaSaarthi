@@ -23,11 +23,18 @@ class SyncRepositoryImpl @Inject constructor(
     private val syncPrefs: com.hackx.ruraledtech.data.local.prefs.SyncPreferences,
     private val masteryDao: com.hackx.ruraledtech.data.local.dao.MasteryDao,
     private val progressDao: com.hackx.ruraledtech.data.local.dao.ProgressDao,
+    private val syncScheduler: com.hackx.ruraledtech.core.work.SyncScheduler,
 ) : SyncRepository {
 
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
-    override suspend fun enqueueEvent(event: SyncEvent) = syncEventDao.insert(event.toEntity())
+    override suspend fun enqueueEvent(event: SyncEvent) {
+        syncEventDao.insert(event.toEntity())
+        // WorkManager's own CONNECTED constraint defers this until connectivity is actually
+        // available, so it's safe to request opportunistically on every enqueue rather than
+        // only at app start — see SyncScheduler, which was previously never invoked anywhere.
+        syncScheduler.scheduleOpportunisticSync()
+    }
 
     override suspend fun getPendingEvents(): List<SyncEvent> = syncEventDao.getPending().map { it.toDomain() }
 

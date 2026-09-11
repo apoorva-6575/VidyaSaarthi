@@ -1,7 +1,9 @@
 package com.hackx.ruraledtech.feature.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,8 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
@@ -29,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.hackx.ruraledtech.core.connectivity.ConnectivityState
@@ -90,21 +95,11 @@ fun HomeScreen(
             }
 
             item {
-                Card(modifier = Modifier.fillMaxWidth().clickableRow(onOpenSubjects)) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null)
-                        Text("Browse all subjects", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 12.dp))
-                    }
-                }
+                NavRow(icon = Icons.AutoMirrored.Filled.MenuBook, label = "Browse all subjects", onClick = onOpenSubjects)
             }
 
             item {
-                Card(modifier = Modifier.fillMaxWidth().clickableRow(onOpenProgress)) {
-                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null)
-                        Text("View full progress", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 12.dp))
-                    }
-                }
+                NavRow(icon = Icons.AutoMirrored.Filled.TrendingUp, label = "View full progress", onClick = onOpenProgress)
             }
 
             item { Spacer(Modifier.height(24.dp)) }
@@ -127,6 +122,25 @@ private fun SubjectProgressRow(subject: SubjectProgress, onClick: () -> Unit) {
                 progress = { subject.completionPercentage },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
+        }
+    }
+}
+
+/** Large icon-in-a-circle + label, same pattern as RoleSelectionScreen's icon tiles, so key navigation reads at a glance without relying on the text label. */
+@Composable
+private fun NavRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth().clickableRow(onClick)) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                    .padding(12.dp),
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, modifier = Modifier.fillMaxSize())
+            }
+            Text(label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 16.dp))
         }
     }
 }

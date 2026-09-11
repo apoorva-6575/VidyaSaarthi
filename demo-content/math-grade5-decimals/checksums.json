@@ -1,0 +1,11 @@
+{
+  "files": {
+    "lessons/lesson_decimals_en.json": "ce040b05addff2c140340b274cc188e50350558b3484bcf8ec9049d2956aced7",
+    "lessons/lesson_decimals_hi.json": "ee22174d130cdb4cbe8d8409358f1dfefb3e6b07915eb770b47b484373c1fb1c",
+    "questions/q_dec_en_1.json": "0062e2485636d4159e2993dfa8ba6bf78d36feadd78c8ddc819dcfac3a9ff36f",
+    "questions/q_dec_en_2.json": "88d9ee0f1791254c91904e85c49855ed47e66f06a947d735aa6f8383dd7d303c",
+    "questions/q_dec_en_3.json": "28e1c03521faa07f5f08bb83c2dc032aceae1bc79984e4288417a3c222b86aa7",
+    "questions/q_dec_hi_1.json": "2b3de8c5278007ccae8ab5169b760fe9d53cfcd4331cfd60f520fca47d1d7c2d",
+    "questions/q_dec_hi_2.json": "4725491183e470e1ae1f86500aa090b2c0fc6215988012c496d9759f0857926a"
+  }
+}

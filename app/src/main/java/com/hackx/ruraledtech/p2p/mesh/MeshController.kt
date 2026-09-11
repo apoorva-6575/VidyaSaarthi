@@ -12,6 +12,12 @@ import com.hackx.ruraledtech.p2p.protocol.P2PMessage
 import com.hackx.ruraledtech.p2p.protocol.ProtocolSerializer
 import com.hackx.ruraledtech.p2p.storage.PackageStorageManager
 import com.hackx.ruraledtech.p2p.transfer.TransferManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
@@ -21,7 +27,8 @@ class MeshController(
     private val transferManager: TransferManager? = null,
     private val packageStorageManager: PackageStorageManager? = null,
     private var passportManager: PassportManager? = null,
-    private val deviceId: String = UUID.randomUUID().toString()
+    private val deviceId: String = UUID.randomUUID().toString(),
+    private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
 ) : ConnectionListener {
 
     private val TAG = "MeshController"
@@ -29,20 +36,45 @@ class MeshController(
     private var localManifest = ContentManifest(deviceId, 1, emptyList())
     private val connectedEndpoints = mutableSetOf<String>()
 
+    /**
+     * Connected peer endpoint IDs were tracked internally but never exposed anywhere the UI
+     * could see them — meaning there was no way to build a "send my passport to this nearby
+     * device" screen at all. Backs the same connectedEndpoints set the rest of this class
+     * already uses.
+     */
+    private val _connectedEndpointsFlow = MutableStateFlow<Set<String>>(emptySet())
+    val connectedEndpointsFlow: StateFlow<Set<String>> = _connectedEndpointsFlow.asStateFlow()
+
     init {
         transferManager?.onPackageInstalled = { packageId, version ->
-            Log.d(TAG, "Package $packageId v$version installed. Updating manifest for Store-and-Forward.")
-            val zipFile = packageStorageManager?.getPackageZipFile(packageId)
-            val sizeBytes = zipFile?.length() ?: 0L
+            // A package installed via P2P transfer already got a REAL checksum from
+            // TransferManager.onFileTransferComplete's onSuccess callback (fired just before
+            // this one, same install) — don't clobber it. This only needs to fill in a
+            // descriptor for packages installed some other way (backend download, demo seed)
+            // that never went through that verified-transfer path.
+            val alreadyDescribed = localManifest.packages.any { it.packageId == packageId && it.version == version }
+            if (alreadyDescribed) {
+                Log.d(TAG, "Package $packageId v$version already has a manifest entry from its verified transfer; not overwriting.")
+            } else {
+                Log.d(TAG, "Package $packageId v$version installed outside P2P transfer. Computing real checksum for Store-and-Forward.")
+                coroutineScope.launch {
+                    val zipFile = packageStorageManager?.getPackageZipFile(packageId)
+                    val checksum = zipFile?.let { packageStorageManager?.computeSha256(it) }
+                    if (zipFile == null || checksum == null) {
+                        Log.w(TAG, "No local ZIP/checksum available for $packageId — it cannot be advertised for Store-and-Forward yet.")
+                        return@launch
+                    }
 
-            val updatedPackages = localManifest.packages.filterNot { it.packageId == packageId } +
-                PackageDescriptor(packageId, version, "installed_package_hash", sizeBytes)
+                    val updatedPackages = localManifest.packages.filterNot { it.packageId == packageId } +
+                        PackageDescriptor(packageId, version, checksum, zipFile.length())
 
-            localManifest = localManifest.copy(
-                protocolVersion = localManifest.protocolVersion + 1,
-                packages = updatedPackages
-            )
-            broadcastLocalManifest()
+                    localManifest = localManifest.copy(
+                        protocolVersion = localManifest.protocolVersion + 1,
+                        packages = updatedPackages
+                    )
+                    broadcastLocalManifest()
+                }
+            }
         }
     }
 
@@ -74,6 +106,7 @@ class MeshController(
     override fun onConnectionAccepted(endpointId: String) {
         Log.d(TAG, "Connection accepted with $endpointId. Sending local manifest.")
         connectedEndpoints.add(endpointId)
+        _connectedEndpointsFlow.value = connectedEndpoints.toSet()
         broadcastLocalManifest(endpointId)
     }
 
@@ -101,6 +134,7 @@ class MeshController(
     override fun onDisconnected(endpointId: String) {
         Log.d(TAG, "Disconnected from $endpointId")
         connectedEndpoints.remove(endpointId)
+        _connectedEndpointsFlow.value = connectedEndpoints.toSet()
     }
 
     // --- PROTOCOL ROUTING ---
