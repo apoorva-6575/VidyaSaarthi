@@ -9,14 +9,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
+from app.core.config import settings
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
+@app.on_event("startup")
+def startup_event():
+    from app.core.minio_client import ensure_buckets
+    ensure_buckets()
 
 @app.get("/health")
 def health_check():

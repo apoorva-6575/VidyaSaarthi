@@ -19,7 +19,11 @@ import javax.inject.Inject
 class SyncRepositoryImpl @Inject constructor(
     private val syncEventDao: SyncEventDao,
     private val connectivityObserver: ConnectivityObserver,
+    private val api: com.hackx.ruraledtech.data.remote.RuralEdTechApi,
+    private val syncPrefs: com.hackx.ruraledtech.data.local.prefs.SyncPreferences,
 ) : SyncRepository {
+
+    private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     override suspend fun enqueueEvent(event: SyncEvent) = syncEventDao.insert(event.toEntity())
 
@@ -33,9 +37,70 @@ class SyncRepositoryImpl @Inject constructor(
         if (connectivityObserver.current() == ConnectivityState.OFFLINE) {
             return SyncOutcome.Deferred
         }
+        
         val pending = getPendingEvents()
-        if (pending.isEmpty()) return SyncOutcome.Success(0)
-        markSynced(pending.map { it.eventId })
-        return SyncOutcome.Success(pending.size)
+        
+        try {
+            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            dateFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            
+            val payloads = pending.map { event ->
+                com.hackx.ruraledtech.data.remote.dto.SyncEventPayload(
+                    event_id = event.eventId,
+                    learner_id = event.learnerId,
+                    device_id = event.deviceId,
+                    event_type = event.eventType.name,
+                    timestamp = dateFormat.format(java.util.Date(event.timestamp)),
+                    payload = json.parseToJsonElement(event.payloadJson) as kotlinx.serialization.json.JsonObject,
+                    schema_version = 1
+                )
+            }
+            
+            val request = com.hackx.ruraledtech.data.remote.dto.SyncRequest(
+                device_id = syncPrefs.deviceId,
+                last_server_sequence = syncPrefs.lastServerSequence,
+                events = payloads
+            )
+            
+            val response = api.syncEvents(request)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                
+                // Mark local events as synced
+                if (pending.isNotEmpty()) {
+                    markSynced(pending.map { it.eventId })
+                }
+                
+                // Process new events from server (pull sync)
+                body.new_server_events.forEach { payload ->
+                    // In a complete implementation we would map server events 
+                    // and store them. For MVP Group 4, we store the raw event:
+                    val timestampLong = try {
+                        dateFormat.parse(payload.timestamp)?.time ?: 0L
+                    } catch (e: Exception) {
+                        0L
+                    }
+                    val eventEntity = com.hackx.ruraledtech.data.local.entity.SyncEventEntity(
+                        eventId = payload.event_id,
+                        learnerId = payload.learner_id,
+                        deviceId = payload.device_id,
+                        eventType = payload.event_type,
+                        timestamp = timestampLong,
+                        payloadJson = payload.payload.toString(),
+                        syncStatus = "SYNCED"
+                    )
+                    syncEventDao.insert(eventEntity)
+                }
+                
+                syncPrefs.lastServerSequence = body.next_server_sequence
+                return SyncOutcome.Success(pending.size)
+            } else {
+                return SyncOutcome.PartialFailure(Exception("Server returned ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return SyncOutcome.PartialFailure(e)
+        }
     }
 }
+

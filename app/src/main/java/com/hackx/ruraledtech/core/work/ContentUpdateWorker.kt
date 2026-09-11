@@ -16,7 +16,70 @@ import dagger.assisted.AssistedInject
 class ContentUpdateWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
+    private val api: com.hackx.ruraledtech.data.remote.RuralEdTechApi,
+    private val contentDao: com.hackx.ruraledtech.data.local.dao.ContentPackageDao,
+    private val contentInstaller: com.hackx.ruraledtech.p2p.integration.ContentInstaller
 ) : CoroutineWorker(context, params) {
 
-    override suspend fun doWork(): Result = Result.success()
+    override suspend fun doWork(): Result {
+        try {
+            val response = api.getAvailableContent()
+            if (!response.isSuccessful || response.body() == null) {
+                return Result.retry()
+            }
+
+            val availablePackages = response.body()!!
+            
+            for (pkg in availablePackages) {
+                val latestLocal = contentDao.getLatest(pkg.id)
+                // If we don't have it, or ours is older
+                if (latestLocal == null || latestLocal.version < pkg.version) {
+                    val success = downloadAndInstall(pkg)
+                    if (!success) {
+                        // Log but continue trying others
+                    }
+                }
+            }
+            
+            return Result.success()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return Result.retry()
+        }
+    }
+
+    private suspend fun downloadAndInstall(pkg: com.hackx.ruraledtech.data.remote.dto.ContentPackageDto): Boolean {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val downloadResp = api.downloadContent(pkg.id, pkg.version)
+                if (!downloadResp.isSuccessful || downloadResp.body() == null) {
+                    return@withContext false
+                }
+
+                // Save to temp file
+                val tempFile = java.io.File(applicationContext.cacheDir, "pkg_${pkg.id}_${pkg.version}.zip")
+                downloadResp.body()!!.byteStream().use { input ->
+                    java.io.FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                // Verify Checksum
+                val isHashValid = com.hackx.ruraledtech.p2p.transfer.PackageVerifier.verifyFile(tempFile, pkg.checksum)
+                if (!isHashValid) {
+                    tempFile.delete()
+                    return@withContext false
+                }
+
+                // Install
+                val installed = contentInstaller.install(tempFile.absolutePath)
+                tempFile.delete()
+                return@withContext installed
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return@withContext false
+            }
+        }
+    }
 }
+

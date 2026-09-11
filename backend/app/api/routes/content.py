@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
@@ -7,6 +8,7 @@ from app.api.dependencies import get_db, get_current_teacher
 from app.models.content import ContentPackage
 from app.schemas.content import ContentPackageResponse, ContentPackageManifest
 from app.models.teacher import Teacher
+from app.core.minio_client import minio_client, CONTENT_BUCKET
 
 router = APIRouter()
 
@@ -48,11 +50,21 @@ def upload_content_package(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON in manifest")
 
-    # In a real app, we would upload `file.file` to MinIO here
-    # file_size = upload_to_minio(file.file, f"{package_id}_{version}.zip")
-    
     file.file.seek(0, 2)
     file_size = file.file.tell()
+    file.file.seek(0)
+
+    object_name = f"{package_id}/{version}/content.zip"
+    try:
+        minio_client.put_object(
+            CONTENT_BUCKET,
+            object_name,
+            file.file,
+            length=file_size,
+            content_type=file.content_type
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload to storage: {str(e)}")
 
     new_pkg = ContentPackage(
         id=package_id,
@@ -70,6 +82,32 @@ def upload_content_package(
     db.commit()
     db.refresh(new_pkg)
     return new_pkg
+
+@router.get("/{package_id}/{version}/download")
+def download_package(
+    package_id: str,
+    version: int,
+    db: Session = Depends(get_db)
+):
+    pkg = db.query(ContentPackage).filter(
+        ContentPackage.id == package_id,
+        ContentPackage.version == version
+    ).first()
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+        
+    object_name = f"{package_id}/{version}/content.zip"
+    try:
+        response = minio_client.get_object(CONTENT_BUCKET, object_name)
+        return StreamingResponse(
+            response.stream(32 * 1024), 
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename=pkg_{package_id}_{version}.zip"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch from storage: {str(e)}")
 
 @router.post("/{package_id}/{version}/revoke")
 def revoke_package(
