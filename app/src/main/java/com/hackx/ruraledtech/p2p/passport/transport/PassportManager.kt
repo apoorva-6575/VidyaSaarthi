@@ -30,7 +30,7 @@ class PassportManager(
             val rawJson = exporter.exportLearnerData(learnerId)
             
             Log.d(TAG, "Encrypting with provided PIN...")
-            val (encryptedPayload, iv) = PassportCrypto.encrypt(rawJson, pin)
+            val (encryptedPayload, iv, salt) = PassportCrypto.encrypt(rawJson, pin)
 
             val passport = LearningPassport(
                 passportId = UUID.randomUUID().toString(),
@@ -38,13 +38,19 @@ class PassportManager(
                 version = 1,
                 timestamp = System.currentTimeMillis(),
                 encryptedPayload = encryptedPayload,
-                iv = iv
+                iv = iv,
+                salt = salt
             )
 
-            // In a full implementation, we'd add a Passport message to P2PMessage. 
-            // We'll wrap it in a special Payload.Type.BYTES transfer.
             Log.d(TAG, "Sending encrypted passport over the mesh...")
-            // TODO: Hook this into MeshController's send queue
+            val message = P2PMessage.PassportTransfer(
+                messageId = UUID.randomUUID().toString(),
+                senderDeviceId = deviceId,
+                timestamp = System.currentTimeMillis(),
+                passport = passport
+            )
+            val payload = ProtocolSerializer.serialize(message)
+            connectionManager.sendBytes(endpointId, payload)
         }
     }
 
@@ -54,7 +60,7 @@ class PassportManager(
     fun receiveAndImportPassport(passport: LearningPassport, pin: String) {
         coroutineScope.launch {
             Log.d(TAG, "Attempting to decrypt passport ${passport.passportId}...")
-            val decryptedJson = PassportCrypto.decrypt(passport.encryptedPayload, passport.iv, pin)
+            val decryptedJson = PassportCrypto.decrypt(passport.encryptedPayload, passport.iv, passport.salt, pin)
 
             if (decryptedJson != null) {
                 Log.d(TAG, "Decryption SUCCESS! Handing off to Group 1 to merge.")

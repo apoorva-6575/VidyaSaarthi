@@ -40,7 +40,8 @@ sealed interface P2PMessage {
         override val senderDeviceId: String,
         override val timestamp: Long,
         val packageId: String,
-        val version: Int
+        val version: Int,
+        val expectedHash: String
     ) : P2PMessage
 
     @Serializable
@@ -48,7 +49,8 @@ sealed interface P2PMessage {
         override val messageId: String,
         override val senderDeviceId: String,
         override val timestamp: Long,
-        val packageId: String
+        val packageId: String,
+        val version: Int
     ) : P2PMessage
 
     @Serializable

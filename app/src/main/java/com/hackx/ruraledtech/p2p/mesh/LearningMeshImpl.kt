@@ -2,12 +2,14 @@ package com.hackx.ruraledtech.p2p.mesh
 
 import android.util.Log
 import com.hackx.ruraledtech.p2p.connection.P2PConnectionManager
-import com.hackx.ruraledtech.p2p.integration.ContentRequirement
+import com.hackx.ruraledtech.domain.model.ContentRequirement
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class LearningMeshImpl(
+import javax.inject.Inject
+
+class LearningMeshImpl @Inject constructor(
     private val connectionManager: P2PConnectionManager,
     private val meshController: MeshController
     // In a real DI setup (like Hilt), TransferManager and PassportManager would also be injected here
@@ -42,7 +44,7 @@ class LearningMeshImpl(
         
         return if (_meshState.value == MeshState.CONNECTED || _meshState.value == MeshState.PEERS_AVAILABLE) {
             Log.d(TAG, "Mesh is active. Dispatching demand-driven request.")
-            // (In a full implementation, you'd trigger meshController to send a REQUEST)
+            meshController.broadcastRequest(requirement.packageId, requirement.version ?: 1)
             true
         } else {
             Log.w(TAG, "Mesh is offline. Cannot fulfill ContentRequirement right now.")

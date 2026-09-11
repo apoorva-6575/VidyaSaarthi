@@ -12,17 +12,19 @@ object PassportCrypto {
     private const val ALGORITHM = "AES/GCM/NoPadding"
     private const val ITERATIONS = 10000
     private const val KEY_LENGTH = 256
-    private const val SALT = "RuralEdTechSalt_HackX" // In production, generate per-user and pass with IV
 
-    private fun deriveKey(pin: String): SecretKeySpec {
+    private fun deriveKey(pin: String, salt: ByteArray): SecretKeySpec {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(pin.toCharArray(), SALT.toByteArray(), ITERATIONS, KEY_LENGTH)
+        val spec = PBEKeySpec(pin.toCharArray(), salt, ITERATIONS, KEY_LENGTH)
         val tmp = factory.generateSecret(spec)
         return SecretKeySpec(tmp.encoded, "AES")
     }
 
-    fun encrypt(plainTextJson: String, pin: String): Pair<String, String> {
-        val secretKey = deriveKey(pin)
+    fun encrypt(plainTextJson: String, pin: String): Triple<String, String, String> {
+        val salt = ByteArray(16)
+        SecureRandom().nextBytes(salt)
+        
+        val secretKey = deriveKey(pin, salt)
         val cipher = Cipher.getInstance(ALGORITHM)
         
         // Generate random IV
@@ -33,15 +35,17 @@ object PassportCrypto {
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec)
         val cipherText = cipher.doFinal(plainTextJson.toByteArray(Charsets.UTF_8))
         
-        return Pair(
+        return Triple(
             Base64.encodeToString(cipherText, Base64.NO_WRAP),
-            Base64.encodeToString(iv, Base64.NO_WRAP)
+            Base64.encodeToString(iv, Base64.NO_WRAP),
+            Base64.encodeToString(salt, Base64.NO_WRAP)
         )
     }
 
-    fun decrypt(encryptedPayload: String, ivString: String, pin: String): String? {
+    fun decrypt(encryptedPayload: String, ivString: String, saltString: String, pin: String): String? {
         return try {
-            val secretKey = deriveKey(pin)
+            val salt = Base64.decode(saltString, Base64.NO_WRAP)
+            val secretKey = deriveKey(pin, salt)
             val cipher = Cipher.getInstance(ALGORITHM)
             val iv = Base64.decode(ivString, Base64.NO_WRAP)
             val parameterSpec = GCMParameterSpec(128, iv)

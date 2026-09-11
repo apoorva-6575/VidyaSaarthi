@@ -1,7 +1,7 @@
 package com.hackx.ruraledtech.p2p.mesh
 
 import kotlinx.coroutines.flow.Flow
-import com.hackx.ruraledtech.p2p.integration.ContentRequirement
+import com.hackx.ruraledtech.domain.model.ContentRequirement
 
 interface LearningMesh {
     // Commands

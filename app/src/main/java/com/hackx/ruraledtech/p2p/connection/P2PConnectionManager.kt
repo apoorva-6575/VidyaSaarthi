@@ -3,6 +3,7 @@ package com.hackx.ruraledtech.p2p.connection
 import android.net.Uri
 
 interface P2PConnectionManager {
+    fun setListener(listener: ConnectionListener)
     fun startAdvertising(deviceName: String)
     fun stopAdvertising()
     
