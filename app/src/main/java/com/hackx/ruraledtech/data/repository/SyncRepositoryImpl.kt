@@ -39,13 +39,13 @@ class SyncRepositoryImpl @Inject constructor(
         if (connectivityObserver.current() == ConnectivityState.OFFLINE) {
             return SyncOutcome.Deferred
         }
-        
+
         val pending = getPendingEvents()
-        
+
         try {
             val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
             dateFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
-            
+
             val payloads = pending.map { event ->
                 com.hackx.ruraledtech.data.remote.dto.SyncEventPayload(
                     event_id = event.eventId,
@@ -57,22 +57,22 @@ class SyncRepositoryImpl @Inject constructor(
                     schema_version = 1
                 )
             }
-            
+
             val request = com.hackx.ruraledtech.data.remote.dto.SyncRequest(
                 device_id = syncPrefs.deviceId,
                 last_server_sequence = syncPrefs.lastServerSequence,
                 events = payloads
             )
-            
+
             val response = api.syncEvents(request)
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
-                
+
                 // Mark local events as synced
                 if (pending.isNotEmpty()) {
                     markSynced(pending.map { it.eventId })
                 }
-                
+
                 // Process new events from server (pull sync)
                 body.new_server_events.forEach { payload ->
                     val timestampLong = try {
@@ -80,8 +80,8 @@ class SyncRepositoryImpl @Inject constructor(
                     } catch (e: Exception) {
                         0L
                     }
-                    
-                    val eventEntity = com.hackx.ruraledtech.data.local.entity.SyncEventEntity(
+
+                    val eventEntity = com.hackx.ruraledtech.data.local.entities.SyncEventEntity(
                         eventId = payload.event_id,
                         learnerId = payload.learner_id,
                         deviceId = payload.device_id,
@@ -91,40 +91,49 @@ class SyncRepositoryImpl @Inject constructor(
                         syncStatus = "SYNCED"
                     )
                     syncEventDao.insert(eventEntity)
-                    
+
                     // Reconcile local state based on event
                     try {
                         when (payload.event_type) {
                             "MASTERY_UPDATED" -> {
-                                val conceptId = payload.payload["concept_id"]?.let { 
-                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content else it.toString() 
+                                val conceptId = payload.payload["concept_id"]?.let {
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content else it.toString()
                                 } ?: ""
-                                val score = payload.payload["mastery"]?.let { 
-                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f 
+                                val score = payload.payload["mastery"]?.let {
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f
                                 } ?: 0f
-                                
+
+                                // Preserve conceptName/confidence/attemptCount from any existing
+                                // local row (this event only carries a score) rather than
+                                // clobbering them with placeholders.
+                                val existing = masteryDao.get(payload.learner_id, conceptId)
                                 val masteryEntity = com.hackx.ruraledtech.data.local.entities.MasteryEntity(
                                     learnerId = payload.learner_id,
                                     conceptId = conceptId,
-                                    masteryLevel = score,
+                                    conceptName = existing?.conceptName ?: conceptId,
+                                    score = score,
+                                    confidence = existing?.confidence ?: 0.5f,
+                                    attemptCount = existing?.attemptCount ?: 1,
                                     lastUpdated = timestampLong
                                 )
                                 masteryDao.upsert(masteryEntity)
                             }
                             "PROGRESS_UPDATED" -> {
-                                val contentId = payload.payload["content_id"]?.let { 
-                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content else it.toString() 
+                                val contentId = payload.payload["content_id"]?.let {
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content else it.toString()
                                 } ?: ""
-                                val progress = payload.payload["progress"]?.let { 
-                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f 
+                                val progress = payload.payload["progress"]?.let {
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f
                                 } ?: 0f
-                                
+
+                                val existing = progressDao.get(payload.learner_id, contentId)
                                 val progressEntity = com.hackx.ruraledtech.data.local.entities.LessonProgressEntity(
                                     learnerId = payload.learner_id,
                                     lessonId = contentId,
-                                    progress = progress,
-                                    isCompleted = progress >= 1.0f,
-                                    lastUpdated = timestampLong
+                                    completionPercentage = progress,
+                                    completed = progress >= 1.0f,
+                                    lastPosition = existing?.lastPosition ?: 0,
+                                    updatedAt = timestampLong
                                 )
                                 progressDao.upsert(progressEntity)
                             }
@@ -133,16 +142,15 @@ class SyncRepositoryImpl @Inject constructor(
                         e.printStackTrace()
                     }
                 }
-                
+
                 syncPrefs.lastServerSequence = body.next_server_sequence
                 return SyncOutcome.Success(pending.size)
             } else {
-                return SyncOutcome.PartialFailure(Exception("Server returned ${response.code()}"))
+                return SyncOutcome.PartialFailure(uploaded = 0, failed = pending.size)
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            return SyncOutcome.PartialFailure(e)
+            return SyncOutcome.PartialFailure(uploaded = 0, failed = pending.size)
         }
     }
 }
-

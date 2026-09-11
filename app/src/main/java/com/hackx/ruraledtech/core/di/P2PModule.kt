@@ -1,6 +1,7 @@
 package com.hackx.ruraledtech.core.di
 
 import android.content.Context
+import com.hackx.ruraledtech.data.contentpackage.P2PContentInstallerAdapter
 import com.hackx.ruraledtech.p2p.connection.NearbyConnectionManagerImpl
 import com.hackx.ruraledtech.p2p.connection.P2PConnectionManager
 import com.hackx.ruraledtech.p2p.manifest.ManifestReconciler
@@ -70,4 +71,17 @@ object P2PModule {
     ): LearningMesh {
         return LearningMeshImpl(connectionManager, meshController)
     }
+
+    /**
+     * [com.hackx.ruraledtech.core.work.ContentUpdateWorker] and
+     * [TransferManager] were written against two different ContentInstaller interfaces
+     * (Group 1's [ContentInstaller] and Group 3's [com.hackx.ruraledtech.p2p.integration
+     * .ContentInstaller]) defined independently before either side saw the other's work —
+     * see INTEGRATION.md. This bridges the second one onto the first (which does the real
+     * checksum verification and Room writes) so both call sites keep working without
+     * picking a side; worth reconciling into one interface when there's time.
+     */
+    @Provides
+    @Singleton
+    fun bindP2PContentInstaller(impl: P2PContentInstallerAdapter): com.hackx.ruraledtech.p2p.integration.ContentInstaller = impl
 }
