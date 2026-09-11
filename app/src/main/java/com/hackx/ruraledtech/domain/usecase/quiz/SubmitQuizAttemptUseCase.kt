@@ -17,6 +17,7 @@ import com.hackx.ruraledtech.domain.repository.SyncRepository
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import com.hackx.ruraledtech.domain.engine.AnswerEvaluator
 import javax.inject.Inject
 
 /**
@@ -31,6 +32,7 @@ class SubmitQuizAttemptUseCase @Inject constructor(
     private val progressRepository: ProgressRepository,
     private val recommendationRepository: RecommendationRepository,
     private val learningEngine: LearningEngine,
+    private val answerEvaluator: AnswerEvaluator,
     private val idGenerator: IdGenerator,
     private val deviceIdProvider: DeviceIdProvider,
     private val clock: AppClock,
@@ -41,7 +43,8 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         selectedOptionIds: List<String>,
         responseTimeMs: Long,
     ): LearningResult {
-        val correct = evaluateAnswer(question, selectedOptionIds)
+        val evalResult = answerEvaluator.evaluate(question, selectedOptionIds)
+        val correct = evalResult.correct
         val deviceId = deviceIdProvider.get()
 
         val attempt = Attempt(
@@ -75,10 +78,6 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         result.recommendation?.let { recommendationRepository.saveRecommendation(it) }
         return result
     }
-
-    /** Deterministic, local, no LLM — PS section 6's "runtime adaptive engine must be deterministic." */
-    private fun evaluateAnswer(question: Question, selectedOptionIds: List<String>): Boolean =
-        selectedOptionIds.size == 1 && selectedOptionIds.first() == question.correctOptionId
 
     private fun quizAttemptPayload(questionId: String, correct: Boolean): String =
         Json.encodeToString(

@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * On-disk JSON shapes for a content-package directory (PS section 11):
- *   manifest.json, lessons/*.json, questions/*.json, checksums.json
+ *   manifest.json, lessons json, questions json, checksums.json
  * This schema is a shared contract with Group 2 (who authors the content) and Group 3
  * (who moves the raw bytes between devices) — see INTEGRATION.md before changing field names.
  */

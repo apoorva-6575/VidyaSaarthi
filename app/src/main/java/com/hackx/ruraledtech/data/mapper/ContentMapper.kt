@@ -95,3 +95,21 @@ fun ContentPackage.toEntity(): ContentPackageEntity = ContentPackageEntity(
     state = state.name,
     priority = priority,
 )
+
+fun com.hackx.ruraledtech.data.local.entities.ConceptEntity.toDomain(): com.hackx.ruraledtech.domain.model.Concept =
+    com.hackx.ruraledtech.domain.model.Concept(
+        conceptId = conceptId,
+        subject = subject,
+        grade = grade,
+        parentConceptId = parentConceptId,
+        name = name,
+    )
+
+fun com.hackx.ruraledtech.domain.model.Concept.toEntity(): com.hackx.ruraledtech.data.local.entities.ConceptEntity =
+    com.hackx.ruraledtech.data.local.entities.ConceptEntity(
+        conceptId = conceptId,
+        subject = subject,
+        grade = grade,
+        parentConceptId = parentConceptId,
+        name = name,
+    )
