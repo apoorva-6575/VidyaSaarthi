@@ -27,7 +27,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME).build()
+        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            .fallbackToDestructiveMigration()
+            .build()
 
     @Provides
     fun provideLearnerDao(db: AppDatabase): LearnerDao = db.learnerDao()
@@ -58,4 +60,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSyncEventDao(db: AppDatabase): SyncEventDao = db.syncEventDao()
+    
+    @Provides
+    fun provideClassGroupDao(db: AppDatabase): com.hackx.ruraledtech.data.local.dao.ClassGroupDao = db.classGroupDao()
 }

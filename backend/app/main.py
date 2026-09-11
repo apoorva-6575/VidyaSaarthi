@@ -27,7 +27,25 @@ def startup_event():
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "database": "ok", "storage": "ok"}
+    status = {"status": "ok", "database": "ok", "storage": "ok"}
+    try:
+        from app.db.session import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        status["database"] = f"error: {str(e)}"
+        status["status"] = "error"
+        
+    try:
+        from app.core.minio_client import minio_client, CONTENT_BUCKET
+        minio_client.bucket_exists(CONTENT_BUCKET)
+    except Exception as e:
+        status["storage"] = f"error: {str(e)}"
+        status["status"] = "error"
+        
+    return status
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(sync.router, prefix="/api/v1/sync", tags=["Sync"])

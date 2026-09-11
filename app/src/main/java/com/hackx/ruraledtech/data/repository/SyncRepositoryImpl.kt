@@ -21,6 +21,8 @@ class SyncRepositoryImpl @Inject constructor(
     private val connectivityObserver: ConnectivityObserver,
     private val api: com.hackx.ruraledtech.data.remote.RuralEdTechApi,
     private val syncPrefs: com.hackx.ruraledtech.data.local.prefs.SyncPreferences,
+    private val masteryDao: com.hackx.ruraledtech.data.local.dao.MasteryDao,
+    private val progressDao: com.hackx.ruraledtech.data.local.dao.ProgressDao,
 ) : SyncRepository {
 
     private val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
@@ -73,13 +75,12 @@ class SyncRepositoryImpl @Inject constructor(
                 
                 // Process new events from server (pull sync)
                 body.new_server_events.forEach { payload ->
-                    // In a complete implementation we would map server events 
-                    // and store them. For MVP Group 4, we store the raw event:
                     val timestampLong = try {
                         dateFormat.parse(payload.timestamp)?.time ?: 0L
                     } catch (e: Exception) {
                         0L
                     }
+                    
                     val eventEntity = com.hackx.ruraledtech.data.local.entity.SyncEventEntity(
                         eventId = payload.event_id,
                         learnerId = payload.learner_id,
@@ -90,6 +91,47 @@ class SyncRepositoryImpl @Inject constructor(
                         syncStatus = "SYNCED"
                     )
                     syncEventDao.insert(eventEntity)
+                    
+                    // Reconcile local state based on event
+                    try {
+                        when (payload.event_type) {
+                            "MASTERY_UPDATED" -> {
+                                val conceptId = payload.payload["concept_id"]?.let { 
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content else it.toString() 
+                                } ?: ""
+                                val score = payload.payload["mastery"]?.let { 
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f 
+                                } ?: 0f
+                                
+                                val masteryEntity = com.hackx.ruraledtech.data.local.entities.MasteryEntity(
+                                    learnerId = payload.learner_id,
+                                    conceptId = conceptId,
+                                    masteryLevel = score,
+                                    lastUpdated = timestampLong
+                                )
+                                masteryDao.upsert(masteryEntity)
+                            }
+                            "PROGRESS_UPDATED" -> {
+                                val contentId = payload.payload["content_id"]?.let { 
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content else it.toString() 
+                                } ?: ""
+                                val progress = payload.payload["progress"]?.let { 
+                                    if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toFloatOrNull() else 0f 
+                                } ?: 0f
+                                
+                                val progressEntity = com.hackx.ruraledtech.data.local.entities.LessonProgressEntity(
+                                    learnerId = payload.learner_id,
+                                    lessonId = contentId,
+                                    progress = progress,
+                                    isCompleted = progress >= 1.0f,
+                                    lastUpdated = timestampLong
+                                )
+                                progressDao.upsert(progressEntity)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
                 
                 syncPrefs.lastServerSequence = body.next_server_sequence

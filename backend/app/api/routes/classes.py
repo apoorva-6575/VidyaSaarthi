@@ -41,6 +41,7 @@ def add_learner_to_class(class_id: str, learner_id: str, db: Session = Depends(g
     if not db_learner:
         raise HTTPException(status_code=404, detail="Learner not found")
         
-    db_class.learners.append(db_learner)
-    db.commit()
+    if db_learner not in db_class.learners:
+        db_class.learners.append(db_learner)
+        db.commit()
     return {"status": "success", "message": "Learner added to class"}

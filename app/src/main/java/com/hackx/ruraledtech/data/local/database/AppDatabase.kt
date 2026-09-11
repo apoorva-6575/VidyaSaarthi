@@ -42,9 +42,11 @@ import com.hackx.ruraledtech.data.local.entities.SyncEventEntity
         MasteryEntity::class,
         RecommendationEntity::class,
         SyncEventEntity::class,
+        com.hackx.ruraledtech.data.local.entities.ClassGroupEntity::class,
+        com.hackx.ruraledtech.data.local.entities.ClassGroupLearnerEntity::class,
     ],
-    version = 1,
-    exportSchema = true,
+    version = 2,
+    exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -58,6 +60,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun masteryDao(): MasteryDao
     abstract fun recommendationDao(): RecommendationDao
     abstract fun syncEventDao(): SyncEventDao
+    abstract fun classGroupDao(): com.hackx.ruraledtech.data.local.dao.ClassGroupDao
 
     companion object {
         const val DATABASE_NAME = "rural_edtech.db"

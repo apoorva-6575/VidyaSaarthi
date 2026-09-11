@@ -50,6 +50,18 @@ def upload_content_package(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON in manifest")
 
+    import hashlib
+    
+    # Calculate SHA-256 of the uploaded file
+    sha256_hash = hashlib.sha256()
+    file.file.seek(0)
+    for chunk in iter(lambda: file.file.read(4096), b""):
+        sha256_hash.update(chunk)
+    actual_checksum = sha256_hash.hexdigest()
+    
+    if actual_checksum != checksum:
+        raise HTTPException(status_code=400, detail="Checksum mismatch. Uploaded file corrupted or checksum incorrect.")
+
     file.file.seek(0, 2)
     file_size = file.file.tell()
     file.file.seek(0)

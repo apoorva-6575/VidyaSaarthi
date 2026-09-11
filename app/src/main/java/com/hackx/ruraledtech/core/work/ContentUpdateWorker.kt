@@ -50,6 +50,8 @@ class ContentUpdateWorker @AssistedInject constructor(
 
     private suspend fun downloadAndInstall(pkg: com.hackx.ruraledtech.data.remote.dto.ContentPackageDto): Boolean {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var tempFile: java.io.File? = null
+            var extractDir: java.io.File? = null
             try {
                 val downloadResp = api.downloadContent(pkg.id, pkg.version)
                 if (!downloadResp.isSuccessful || downloadResp.body() == null) {
@@ -57,7 +59,7 @@ class ContentUpdateWorker @AssistedInject constructor(
                 }
 
                 // Save to temp file
-                val tempFile = java.io.File(applicationContext.cacheDir, "pkg_${pkg.id}_${pkg.version}.zip")
+                tempFile = java.io.File(applicationContext.cacheDir, "pkg_${pkg.id}_${pkg.version}.zip")
                 downloadResp.body()!!.byteStream().use { input ->
                     java.io.FileOutputStream(tempFile).use { output ->
                         input.copyTo(output)
@@ -70,14 +72,43 @@ class ContentUpdateWorker @AssistedInject constructor(
                     tempFile.delete()
                     return@withContext false
                 }
+                
+                // Safely extract ZIP
+                extractDir = java.io.File(applicationContext.cacheDir, "pkg_extract_${pkg.id}_${pkg.version}")
+                if (extractDir.exists()) {
+                    extractDir.deleteRecursively()
+                }
+                extractDir.mkdirs()
+                
+                java.util.zip.ZipFile(tempFile).use { zip ->
+                    zip.entries().asSequence().forEach { entry ->
+                        val entryFile = java.io.File(extractDir, entry.name)
+                        // Path traversal check
+                        if (!entryFile.canonicalPath.startsWith(extractDir.canonicalPath + java.io.File.separator)) {
+                            throw SecurityException("Zip Path Traversal Vulnerability")
+                        }
+                        if (entry.isDirectory) {
+                            entryFile.mkdirs()
+                        } else {
+                            entryFile.parentFile?.mkdirs()
+                            zip.getInputStream(entry).use { input ->
+                                java.io.FileOutputStream(entryFile).use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        }
+                    }
+                }
 
-                // Install
-                val installed = contentInstaller.install(tempFile.absolutePath)
-                tempFile.delete()
+                // Install from extracted directory
+                val installed = contentInstaller.install(extractDir.absolutePath)
                 return@withContext installed
             } catch (e: Exception) {
                 e.printStackTrace()
                 return@withContext false
+            } finally {
+                tempFile?.delete()
+                extractDir?.deleteRecursively()
             }
         }
     }

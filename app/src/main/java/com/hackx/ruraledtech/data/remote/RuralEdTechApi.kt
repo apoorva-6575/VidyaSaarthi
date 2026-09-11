@@ -28,4 +28,12 @@ interface RuralEdTechApi {
         @Path("package_id") packageId: String,
         @Path("version") version: Int
     ): Response<ResponseBody>
+
+    @GET("api/v1/classes")
+    suspend fun getClasses(): Response<List<com.hackx.ruraledtech.data.remote.dto.ClassGroupDto>>
+    
+    @GET("api/v1/teacher/classes/{class_id}/analytics")
+    suspend fun getClassAnalytics(
+        @Path("class_id") classId: String
+    ): Response<com.hackx.ruraledtech.data.remote.dto.ClassAnalyticsDto>
 }

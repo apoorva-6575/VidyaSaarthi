@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, JSON, Identity
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -15,7 +15,7 @@ class LearningEvent(Base):
     schema_version = Column(Integer, default=1)
     
     # Server side tracking
-    server_sequence = Column(Integer, autoincrement=True, unique=True, index=True)
+    server_sequence = Column(Integer, Identity(always=True), unique=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     learner = relationship("Learner", back_populates="events")
