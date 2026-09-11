@@ -44,7 +44,9 @@ class LearningMeshImpl @Inject constructor(
         
         return if (_meshState.value == MeshState.CONNECTED || _meshState.value == MeshState.PEERS_AVAILABLE) {
             Log.d(TAG, "Mesh is active. Dispatching demand-driven request.")
-            meshController.broadcastRequest(requirement.packageId, requirement.version ?: 1)
+            // ContentRequirement (from Group 2's adaptive engine) names a concept's package
+            // but doesn't pin a version; 0 means "whatever version a peer has."
+            meshController.broadcastRequest(requirement.packageId, 0)
             true
         } else {
             Log.w(TAG, "Mesh is offline. Cannot fulfill ContentRequirement right now.")

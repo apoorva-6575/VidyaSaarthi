@@ -38,7 +38,7 @@ class MeshController(
             updatedPackages.add(PackageDescriptor(packageId, version, "checksum_placeholder", 0L))
             
             localManifest = localManifest.copy(
-                version = localManifest.version + 1,
+                protocolVersion = localManifest.protocolVersion + 1,
                 packages = updatedPackages
             )
             

@@ -1,6 +1,6 @@
 package com.hackx.ruraledtech.p2p.manifest
 
-class ManifestReconciler {
+class ManifestReconciler @javax.inject.Inject constructor() {
 
     fun reconcile(
         local: ContentManifest,

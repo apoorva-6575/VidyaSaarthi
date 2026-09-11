@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.hackx.ruraledtech.domain.model.ContentPackage
 import com.hackx.ruraledtech.domain.usecase.content.ObserveInstalledPackagesUseCase
 import com.hackx.ruraledtech.domain.usecase.content.RemoveContentPackageUseCase
-import com.hackx.ruraledtech.p2p.integration.ContentRequirement
+import com.hackx.ruraledtech.domain.model.ContentRequirement
 import com.hackx.ruraledtech.p2p.mesh.LearningMesh
 import com.hackx.ruraledtech.p2p.mesh.MeshState
 import com.hackx.ruraledtech.p2p.mesh.TransferTask
@@ -44,7 +44,7 @@ class ContentLibraryViewModel @Inject constructor(
     fun requestMissingContent(packageId: String, conceptId: String) {
         viewModelScope.launch {
             learningMesh.requestContent(
-                ContentRequirement(packageId = packageId, version = null, conceptId = conceptId, priority = 1f, reason = "learner_requested"),
+                ContentRequirement(packageId = packageId, conceptId = conceptId, priority = 1f, reason = "learner_requested"),
             )
         }
     }

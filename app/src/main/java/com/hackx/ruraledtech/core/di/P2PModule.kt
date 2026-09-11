@@ -2,6 +2,8 @@ package com.hackx.ruraledtech.core.di
 
 import android.content.Context
 import com.hackx.ruraledtech.data.contentpackage.P2PContentInstallerAdapter
+import com.hackx.ruraledtech.data.passport.P2PLearnerDataExporterAdapter
+import com.hackx.ruraledtech.data.passport.P2PLearnerDataImporterAdapter
 import com.hackx.ruraledtech.p2p.connection.NearbyConnectionManagerImpl
 import com.hackx.ruraledtech.p2p.connection.P2PConnectionManager
 import com.hackx.ruraledtech.p2p.manifest.ManifestReconciler
@@ -84,4 +86,13 @@ object P2PModule {
     @Provides
     @Singleton
     fun bindP2PContentInstaller(impl: P2PContentInstallerAdapter): com.hackx.ruraledtech.p2p.integration.ContentInstaller = impl
+
+    /** Same duplicate-interface situation as above, for the Learning Passport exporter/importer. */
+    @Provides
+    @Singleton
+    fun bindP2PLearnerDataExporter(impl: P2PLearnerDataExporterAdapter): LearnerDataExporter = impl
+
+    @Provides
+    @Singleton
+    fun bindP2PLearnerDataImporter(impl: P2PLearnerDataImporterAdapter): LearnerDataImporter = impl
 }
