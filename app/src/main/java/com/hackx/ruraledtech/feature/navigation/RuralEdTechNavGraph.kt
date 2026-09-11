@@ -22,7 +22,9 @@ import com.hackx.ruraledtech.feature.profile.ProfileScreen
 import com.hackx.ruraledtech.feature.progress.ProgressScreen
 import com.hackx.ruraledtech.feature.quiz.QuizScreen
 import com.hackx.ruraledtech.feature.splash.SplashScreen
+import com.hackx.ruraledtech.feature.teacher.ClassAnalyticsScreen
 import com.hackx.ruraledtech.feature.teacher.TeacherHomeScreen
+import com.hackx.ruraledtech.feature.teacher.TeacherLoginScreen
 
 /**
  * The full learner journey (PS section 24/56/57) lives in this single graph. Nothing here
@@ -46,16 +48,31 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
         composable(Routes.ROLE_SELECTION) {
             RoleSelectionScreen(
                 onRoleSelected = { role ->
-                    val destination = if (role == UserRole.TEACHER) Routes.TEACHER_HOME else Routes.LANGUAGE_SELECTION
+                    val destination = if (role == UserRole.TEACHER) Routes.TEACHER_LOGIN else Routes.LANGUAGE_SELECTION
                     navController.navigate(destination) { popUpTo(Routes.ROLE_SELECTION) { inclusive = true } }
                 },
+            )
+        }
+
+        composable(Routes.TEACHER_LOGIN) {
+            TeacherLoginScreen(
+                onLoginSuccess = { navController.navigate(Routes.TEACHER_HOME) { popUpTo(Routes.TEACHER_LOGIN) { inclusive = true } } },
             )
         }
 
         composable(Routes.TEACHER_HOME) {
             TeacherHomeScreen(
                 onSwitchToStudent = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
+                onOpenClassAnalytics = { classId -> navController.navigate(Routes.classAnalytics(classId)) },
+                onLoggedOut = { navController.navigate(Routes.TEACHER_LOGIN) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
             )
+        }
+
+        composable(
+            route = Routes.CLASS_ANALYTICS,
+            arguments = listOf(navArgument(Routes.ARG_CLASS_ID) { type = NavType.StringType }),
+        ) {
+            ClassAnalyticsScreen()
         }
 
         composable(Routes.LANGUAGE_SELECTION) {

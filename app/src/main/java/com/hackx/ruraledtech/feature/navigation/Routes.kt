@@ -3,7 +3,9 @@ package com.hackx.ruraledtech.feature.navigation
 object Routes {
     const val SPLASH = "splash"
     const val ROLE_SELECTION = "onboarding/role"
+    const val TEACHER_LOGIN = "teacher_login"
     const val TEACHER_HOME = "teacher_home"
+    const val CLASS_ANALYTICS = "teacher/classes/{classId}/analytics"
     const val LANGUAGE_SELECTION = "onboarding/language"
     const val ADD_LEARNER = "onboarding/add_learner"
     const val LEARNER_SELECTION = "learner_selection"
@@ -22,8 +24,10 @@ object Routes {
     fun lessonViewer(lessonId: String) = "lessons/$lessonId"
     fun quiz(lessonId: String) = "lessons/$lessonId/quiz"
     fun conceptDetail(conceptId: String) = "progress/$conceptId"
+    fun classAnalytics(classId: String) = "teacher/classes/$classId/analytics"
 
     const val ARG_SUBJECT = "subject"
     const val ARG_LESSON_ID = "lessonId"
     const val ARG_CONCEPT_ID = "conceptId"
+    const val ARG_CLASS_ID = "classId"
 }

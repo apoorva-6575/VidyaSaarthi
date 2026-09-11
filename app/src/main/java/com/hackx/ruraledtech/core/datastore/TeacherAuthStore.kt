@@ -14,9 +14,11 @@ import javax.inject.Singleton
 private val Context.teacherAuthDataStore by preferencesDataStore(name = "teacher_auth_prefs")
 
 /**
- * Holds the teacher's JWT locally. A teacher account only exists on Group 4's backend —
- * unlike learner profiles, this genuinely requires connectivity to establish, so it lives
- * in its own small store separate from [PreferencesManager]'s offline-first settings.
+ * Holds the teacher's JWT and id locally. A teacher account only exists on Group 4's
+ * backend — unlike learner profiles, this genuinely requires connectivity to establish, so
+ * it lives in its own small store separate from [PreferencesManager]'s offline-first
+ * settings. [teacherId] replaces the "teacher-123" placeholder that TeacherHomeViewModel
+ * used before real auth existed.
  */
 @Singleton
 class TeacherAuthStore @Inject constructor(
@@ -24,18 +26,23 @@ class TeacherAuthStore @Inject constructor(
 ) {
     private object Keys {
         val ACCESS_TOKEN = stringPreferencesKey("teacher_access_token")
+        val TEACHER_ID = stringPreferencesKey("teacher_id")
         val TEACHER_NAME = stringPreferencesKey("teacher_name")
         val TEACHER_EMAIL = stringPreferencesKey("teacher_email")
     }
 
     val accessToken: Flow<String?> = context.teacherAuthDataStore.data.map { it[Keys.ACCESS_TOKEN] }
+    val teacherId: Flow<String?> = context.teacherAuthDataStore.data.map { it[Keys.TEACHER_ID] }
     val teacherName: Flow<String?> = context.teacherAuthDataStore.data.map { it[Keys.TEACHER_NAME] }
 
     suspend fun currentToken(): String? = accessToken.first()
 
-    suspend fun saveSession(token: String, name: String, email: String) {
+    suspend fun currentTeacherId(): String? = teacherId.first()
+
+    suspend fun saveSession(token: String, teacherId: String, name: String, email: String) {
         context.teacherAuthDataStore.edit {
             it[Keys.ACCESS_TOKEN] = token
+            it[Keys.TEACHER_ID] = teacherId
             it[Keys.TEACHER_NAME] = name
             it[Keys.TEACHER_EMAIL] = email
         }
