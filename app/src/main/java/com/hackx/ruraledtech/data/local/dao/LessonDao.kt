@@ -25,4 +25,7 @@ interface LessonDao {
 
     @Query("DELETE FROM lessons WHERE packageId = :packageId")
     suspend fun deleteForPackage(packageId: String)
+
+    @Query("SELECT packageId FROM lessons WHERE conceptId = :conceptId LIMIT 1")
+    suspend fun getPackageIdForConcept(conceptId: String): String?
 }

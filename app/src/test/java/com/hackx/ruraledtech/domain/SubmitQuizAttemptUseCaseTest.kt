@@ -83,4 +83,30 @@ class SubmitQuizAttemptUseCaseTest {
 
         assertThat(outcome.correct).isFalse()
     }
+
+    @Test
+    fun `emitted ContentRequirements automatically trigger LearningMesh requestContent`() = runTest {
+        val learningMesh: com.hackx.ruraledtech.p2p.mesh.LearningMesh = mockk(relaxed = true)
+        val requirement = com.hackx.ruraledtech.domain.model.ContentRequirement(
+            packageId = "pkg_fractions_basics",
+            conceptId = "concept_fractions_basics",
+            priority = 0.90f,
+            reason = "Remediation required"
+        )
+        coEvery { learningEngine.processAttempt(any(), any()) } returns LearningResult(
+            updatedMastery = Mastery("L-1", "fraction_basics", "Fractions", 0.2f, 0.2f, 1, 1000L),
+            recommendation = null,
+            contentRequirements = listOf(requirement)
+        )
+
+        val customUseCase = SubmitQuizAttemptUseCase(
+            quizRepository, syncRepository, progressRepository, recommendationRepository,
+            learningEngine, idGenerator, deviceIdProvider, clock,
+            learningMesh = learningMesh
+        )
+
+        customUseCase(learnerId = "L-1", question = question, selectedOptionIds = listOf("b"), responseTimeMs = 500)
+
+        coVerify { learningMesh.requestContent(match { it.packageId == "pkg_fractions_basics" }) }
+    }
 }

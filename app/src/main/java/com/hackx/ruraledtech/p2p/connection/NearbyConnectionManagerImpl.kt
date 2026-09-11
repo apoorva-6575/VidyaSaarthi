@@ -19,7 +19,7 @@ class NearbyConnectionManagerImpl @Inject constructor(
     
     private val TAG = "NearbyTransport"
 
-    private val incomingPayloads = mutableMapOf<Long, Payload>()
+    private val incomingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload>()
     private var listener: ConnectionListener? = null
 
     override fun setListener(listener: ConnectionListener) {
@@ -68,8 +68,8 @@ class NearbyConnectionManagerImpl @Inject constructor(
                     payload.asBytes()?.let { listener?.onBytesReceived(endpointId, it) }
                 }
                 Payload.Type.FILE -> {
-                    incomingPayloads[payload.id] = payload
                     Log.d(TAG, "Incoming file payload detected: ${payload.id}")
+                    incomingFilePayloads[payload.id] = payload
                 }
             }
         }
@@ -83,9 +83,9 @@ class NearbyConnectionManagerImpl @Inject constructor(
                     listener?.onFileTransferProgress(endpointId, update.payloadId, progress)
                 }
                 PayloadTransferUpdate.Status.SUCCESS -> {
-                    val payload = incomingPayloads.remove(update.payloadId)
-                    val file = payload?.asFile()?.asJavaFile()
-                    if (file != null) {
+                    val payload = incomingFilePayloads.remove(update.payloadId)
+                    val file = payload?.asFile()?.asJavaFile() ?: java.io.File(context.cacheDir, "payload_${update.payloadId}.pkg")
+                    if (file.exists()) {
                         listener?.onFileTransferComplete(endpointId, update.payloadId, file)
                     } else {
                         Log.e(TAG, "Transfer success but file payload missing or invalid: ${update.payloadId}")
@@ -93,7 +93,7 @@ class NearbyConnectionManagerImpl @Inject constructor(
                     }
                 }
                 PayloadTransferUpdate.Status.FAILURE, PayloadTransferUpdate.Status.CANCELED -> {
-                    incomingPayloads.remove(update.payloadId)
+                    incomingFilePayloads.remove(update.payloadId)
                     listener?.onFileTransferFailed(endpointId, update.payloadId)
                 }
             }

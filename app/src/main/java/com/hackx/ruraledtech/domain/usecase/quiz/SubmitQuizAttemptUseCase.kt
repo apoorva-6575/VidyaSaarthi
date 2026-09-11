@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import com.hackx.ruraledtech.data.engine.DefaultAnswerEvaluator
 import com.hackx.ruraledtech.domain.engine.AnswerEvaluator
+import com.hackx.ruraledtech.p2p.mesh.LearningMesh
 import javax.inject.Inject
 
 data class QuizAttemptOutcome(val correct: Boolean, val learningResult: LearningResult)
@@ -39,6 +40,7 @@ class SubmitQuizAttemptUseCase @Inject constructor(
     private val deviceIdProvider: DeviceIdProvider,
     private val clock: AppClock,
     private val answerEvaluator: AnswerEvaluator = DefaultAnswerEvaluator(),
+    private val learningMesh: LearningMesh? = null,
 ) {
     suspend operator fun invoke(
         learnerId: String,
@@ -93,6 +95,12 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         )
 
         result.recommendation?.let { recommendationRepository.saveRecommendation(it) }
+
+        // Automatically dispatch missing or remedial ContentRequirements to LearningMesh for P2P acquisition
+        result.contentRequirements.forEach { requirement ->
+            learningMesh?.requestContent(requirement)
+        }
+
         return QuizAttemptOutcome(correct = correct, learningResult = result)
     }
 

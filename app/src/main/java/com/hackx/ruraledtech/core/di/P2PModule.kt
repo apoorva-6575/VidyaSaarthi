@@ -12,9 +12,9 @@ import com.hackx.ruraledtech.p2p.mesh.LearningMeshImpl
 import com.hackx.ruraledtech.p2p.mesh.MeshController
 import com.hackx.ruraledtech.p2p.transfer.TransferManager
 import com.hackx.ruraledtech.domain.integration.ContentInstaller
+import com.hackx.ruraledtech.domain.integration.LearnerDataExporter
+import com.hackx.ruraledtech.domain.integration.LearnerDataImporter
 import com.hackx.ruraledtech.p2p.passport.transport.PassportManager
-import com.hackx.ruraledtech.p2p.integration.LearnerDataExporter
-import com.hackx.ruraledtech.p2p.integration.LearnerDataImporter
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -90,9 +90,9 @@ object P2PModule {
     /** Same duplicate-interface situation as above, for the Learning Passport exporter/importer. */
     @Provides
     @Singleton
-    fun bindP2PLearnerDataExporter(impl: P2PLearnerDataExporterAdapter): LearnerDataExporter = impl
+    fun bindP2PLearnerDataExporter(impl: P2PLearnerDataExporterAdapter): com.hackx.ruraledtech.p2p.integration.LearnerDataExporter = impl
 
     @Provides
     @Singleton
-    fun bindP2PLearnerDataImporter(impl: P2PLearnerDataImporterAdapter): LearnerDataImporter = impl
+    fun bindP2PLearnerDataImporter(impl: P2PLearnerDataImporterAdapter): com.hackx.ruraledtech.p2p.integration.LearnerDataImporter = impl
 }
