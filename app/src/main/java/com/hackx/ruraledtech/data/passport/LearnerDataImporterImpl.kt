@@ -1,12 +1,15 @@
 package com.hackx.ruraledtech.data.passport
 
 import com.hackx.ruraledtech.core.common.AppClock
+import com.hackx.ruraledtech.data.local.dao.AttemptDao
 import com.hackx.ruraledtech.data.local.dao.LearnerDao
 import com.hackx.ruraledtech.data.local.dao.MasteryDao
 import com.hackx.ruraledtech.data.local.dao.ProgressDao
+import com.hackx.ruraledtech.data.local.entities.AttemptEntity
 import com.hackx.ruraledtech.data.local.entities.LearnerEntity
 import com.hackx.ruraledtech.data.local.entities.LessonProgressEntity
 import com.hackx.ruraledtech.data.local.entities.MasteryEntity
+import com.hackx.ruraledtech.data.passport.dto.PassportAttemptDto
 import com.hackx.ruraledtech.data.passport.dto.PassportMasteryDto
 import com.hackx.ruraledtech.data.passport.dto.PassportProgressDto
 import com.hackx.ruraledtech.domain.integration.LearnerDataImporter
@@ -27,6 +30,7 @@ class LearnerDataImporterImpl @Inject constructor(
     private val learnerDao: LearnerDao,
     private val progressDao: ProgressDao,
     private val masteryDao: MasteryDao,
+    private val attemptDao: AttemptDao,
     private val clock: AppClock,
 ) : LearnerDataImporter {
 
@@ -83,6 +87,30 @@ class LearnerDataImporterImpl @Inject constructor(
                     ),
                 )
                 mergedCount++
+            }
+        }
+
+        if (data.attemptsJson.isNotBlank()) {
+            val incomingAttempts = json.decodeFromString(ListSerializer(PassportAttemptDto.serializer()), data.attemptsJson)
+            incomingAttempts.forEach { incoming ->
+                val localAttempt = attemptDao.getById(incoming.attemptId)
+                if (localAttempt == null) {
+                    attemptDao.insert(
+                        AttemptEntity(
+                            attemptId = incoming.attemptId,
+                            learnerId = data.learnerId,
+                            questionId = incoming.questionId,
+                            conceptId = incoming.conceptId,
+                            selectedOptionIds = emptyList(),
+                            correct = incoming.correct,
+                            responseTimeMs = 0L,
+                            timestamp = incoming.timestamp,
+                            deviceId = "passport_import",
+                            syncStatus = "SYNCED",
+                        ),
+                    )
+                    mergedCount++
+                }
             }
         }
 

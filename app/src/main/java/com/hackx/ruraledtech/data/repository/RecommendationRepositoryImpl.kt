@@ -16,6 +16,9 @@ class RecommendationRepositoryImpl @Inject constructor(
     override fun observeLatestRecommendation(learnerId: String): Flow<Recommendation?> =
         recommendationDao.observeLatest(learnerId).map { it?.toDomain() }
 
+    override suspend fun getLatestRecommendation(learnerId: String): Recommendation? =
+        recommendationDao.getLatest(learnerId)?.toDomain()
+
     override suspend fun saveRecommendation(recommendation: Recommendation) =
         recommendationDao.upsert(recommendation.toEntity())
 }

@@ -12,7 +12,11 @@ object PackageVerifier {
      * Hashes a file using an 8KB buffer on the IO Dispatcher.
      * Returns true if the calculated hash matches the expected hash.
      */
-    suspend fun verifyFile(file: File, expectedHash: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun verifyFile(
+        file: File,
+        expectedHash: String,
+        dispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+    ): Boolean = withContext(dispatcher) {
         if (!file.exists()) return@withContext false
 
         try {

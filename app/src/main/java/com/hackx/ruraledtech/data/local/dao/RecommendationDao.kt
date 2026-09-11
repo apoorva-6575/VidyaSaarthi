@@ -14,4 +14,7 @@ interface RecommendationDao {
 
     @Query("SELECT * FROM recommendations WHERE learnerId = :learnerId")
     fun observeLatest(learnerId: String): Flow<RecommendationEntity?>
+
+    @Query("SELECT * FROM recommendations WHERE learnerId = :learnerId LIMIT 1")
+    suspend fun getLatest(learnerId: String): RecommendationEntity?
 }

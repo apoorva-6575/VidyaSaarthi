@@ -24,6 +24,10 @@ import javax.inject.Singleton
  * when content is missing locally or needed for remediation.
  * Operates 100% offline without direct Room database writes (persistence is owned by the calling use case).
  */
+import com.hackx.ruraledtech.data.local.dao.LessonDao
+import com.hackx.ruraledtech.data.local.dao.RecommendationDao
+import com.hackx.ruraledtech.domain.repository.RecommendationRepository
+
 @Singleton
 class AdaptiveLearningEngineImpl @Inject constructor(
     private val attemptDao: AttemptDao,
@@ -33,6 +37,9 @@ class AdaptiveLearningEngineImpl @Inject constructor(
     private val recommendationEngine: RecommendationEngine,
     private val contentAvailabilityProvider: ContentAvailabilityProvider,
     private val clock: AppClock,
+    private val lessonDao: LessonDao? = null,
+    private val recommendationDao: RecommendationDao? = null,
+    private val recommendationRepository: RecommendationRepository? = null,
 ) : LearningEngine {
 
     override suspend fun processAttempt(learnerId: String, attempt: Attempt): LearningResult {
@@ -57,7 +64,9 @@ class AdaptiveLearningEngineImpl @Inject constructor(
             timestamp = clock.nowMillis(),
         )
 
-        val recommendation = recommendationEngine.generateRecommendation(mastery)
+        val rawRecommendation = recommendationEngine.generateRecommendation(mastery)
+        val realPackageId = lessonDao?.getPackageIdForConcept(rawRecommendation.conceptId) ?: rawRecommendation.contentPackageId
+        val recommendation = rawRecommendation.copy(contentPackageId = realPackageId)
 
         val isAvailable = contentAvailabilityProvider.isPackageAvailable(recommendation.contentPackageId)
         val contentRequirements = if (!isAvailable || recommendation.recommendationType == RecommendationType.REMEDIATION) {
@@ -85,6 +94,7 @@ class AdaptiveLearningEngineImpl @Inject constructor(
     }
 
     override suspend fun getRecommendation(learnerId: String): Recommendation? {
-        return null
+        return recommendationRepository?.getLatestRecommendation(learnerId)
+            ?: recommendationDao?.getLatest(learnerId)?.toDomain()
     }
 }

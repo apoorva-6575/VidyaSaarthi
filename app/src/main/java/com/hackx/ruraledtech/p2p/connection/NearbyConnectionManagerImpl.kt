@@ -51,6 +51,8 @@ class NearbyConnectionManagerImpl(
         }
     }
 
+    private val incomingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload>()
+
     // 3. PAYLOAD CALLBACKS (Data Transfer)
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
@@ -59,9 +61,8 @@ class NearbyConnectionManagerImpl(
                     payload.asBytes()?.let { listener.onBytesReceived(endpointId, it) }
                 }
                 Payload.Type.FILE -> {
-                    // Nearby Connections saves the file to a temp location automatically.
-                    // We wait for the SUCCESS status in onPayloadTransferUpdate to process it.
                     Log.d(TAG, "Incoming file payload detected: ${payload.id}")
+                    incomingFilePayloads[payload.id] = payload
                 }
             }
         }
@@ -75,11 +76,12 @@ class NearbyConnectionManagerImpl(
                     listener.onFileTransferProgress(endpointId, update.payloadId, progress)
                 }
                 PayloadTransferUpdate.Status.SUCCESS -> {
-                    // For MVP, we pass a placeholder file object. 
-                    // In a full implementation, you retrieve the file via payload.asFile().asJavaFile()
-                    listener.onFileTransferComplete(endpointId, update.payloadId, java.io.File("temp_path"))
+                    val payload = incomingFilePayloads.remove(update.payloadId)
+                    val file = payload?.asFile()?.asJavaFile() ?: java.io.File(context.cacheDir, "payload_${update.payloadId}.pkg")
+                    listener.onFileTransferComplete(endpointId, update.payloadId, file)
                 }
                 PayloadTransferUpdate.Status.FAILURE, PayloadTransferUpdate.Status.CANCELED -> {
+                    incomingFilePayloads.remove(update.payloadId)
                     listener.onFileTransferFailed(endpointId, update.payloadId)
                 }
             }

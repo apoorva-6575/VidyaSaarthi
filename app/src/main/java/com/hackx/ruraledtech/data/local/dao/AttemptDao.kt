@@ -12,6 +12,9 @@ interface AttemptDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(attempt: AttemptEntity)
 
+    @Query("SELECT * FROM attempts WHERE attemptId = :attemptId LIMIT 1")
+    suspend fun getById(attemptId: String): AttemptEntity?
+
     @Query("SELECT * FROM attempts WHERE learnerId = :learnerId AND conceptId = :conceptId ORDER BY timestamp DESC")
     fun observeForConcept(learnerId: String, conceptId: String): Flow<List<AttemptEntity>>
 

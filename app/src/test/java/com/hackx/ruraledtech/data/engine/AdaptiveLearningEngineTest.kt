@@ -160,4 +160,132 @@ class AdaptiveLearningEngineTest {
         assertThat(req.conceptId).isEqualTo("concept_fractions_basics")
         assertThat(req.priority).isEqualTo(0.90f)
     }
+
+    @Test
+    fun `missing content package produces high priority ContentRequirement 1_0f`() = runTest {
+        every { clock.nowMillis() } returns 5000L
+
+        val attempt = Attempt(
+            attemptId = "att_103",
+            learnerId = "learner_42",
+            questionId = "q_missing",
+            conceptId = "concept_geometry",
+            selectedOptionIds = listOf("opt_1"),
+            correct = true,
+            responseTimeMs = 1000L,
+            timestamp = 5000L,
+            deviceId = "dev_01",
+            syncStatus = SyncStatus.PENDING,
+        )
+
+        coEvery { attemptDao.getRecent("learner_42", "concept_geometry", limit = 1000) } returns emptyList()
+        coEvery { conceptDao.getById("concept_geometry") } returns ConceptEntity("concept_geometry", "Math", 6, null, "Geometry")
+        coEvery { contentAvailabilityProvider.isPackageAvailable("concept_geometry") } returns false
+
+        val result = engine.processAttempt("learner_42", attempt)
+
+        assertThat(result.contentRequirements).isNotEmpty()
+        val req = result.contentRequirements.first()
+        assertThat(req.packageId).isEqualTo("concept_geometry")
+        assertThat(req.priority).isEqualTo(1.0f)
+    }
+
+    @Test
+    fun `available content package produces no ContentRequirements for standard practice`() = runTest {
+        every { clock.nowMillis() } returns 5000L
+
+        val attempt = Attempt(
+            attemptId = "att_104",
+            learnerId = "learner_42",
+            questionId = "q_algebra",
+            conceptId = "concept_algebra",
+            selectedOptionIds = listOf("opt_1"),
+            correct = true,
+            responseTimeMs = 1000L,
+            timestamp = 5000L,
+            deviceId = "dev_01",
+            syncStatus = SyncStatus.PENDING,
+        )
+
+        coEvery { attemptDao.getRecent("learner_42", "concept_algebra", limit = 1000) } returns emptyList()
+        coEvery { conceptDao.getById("concept_algebra") } returns ConceptEntity("concept_algebra", "Math", 6, null, "Algebra")
+        coEvery { contentAvailabilityProvider.isPackageAvailable("concept_algebra") } returns true
+
+        val result = engine.processAttempt("learner_42", attempt)
+
+        // For non-remediation when package is available, no requirements emitted
+        assertThat(result.recommendation?.recommendationType).isNotEqualTo(RecommendationType.REMEDIATION)
+        assertThat(result.contentRequirements).isEmpty()
+    }
+
+    @Test
+    fun `resolves real packageId from LessonDao when mapping conceptId`() = runTest {
+        every { clock.nowMillis() } returns 5000L
+
+        val lessonDao: com.hackx.ruraledtech.data.local.dao.LessonDao = mockk()
+        coEvery { lessonDao.getPackageIdForConcept("concept_trig") } returns "pkg_trigonometry_v2"
+
+        val customEngine = AdaptiveLearningEngineImpl(
+            attemptDao = attemptDao,
+            questionDao = questionDao,
+            conceptDao = conceptDao,
+            masteryCalculator = masteryCalculator,
+            recommendationEngine = recommendationEngine,
+            contentAvailabilityProvider = contentAvailabilityProvider,
+            clock = clock,
+            lessonDao = lessonDao,
+        )
+
+        val attempt = Attempt(
+            attemptId = "att_105",
+            learnerId = "learner_42",
+            questionId = "q_trig",
+            conceptId = "concept_trig",
+            selectedOptionIds = listOf("opt_1"),
+            correct = true,
+            responseTimeMs = 1000L,
+            timestamp = 5000L,
+            deviceId = "dev_01",
+            syncStatus = SyncStatus.PENDING,
+        )
+
+        coEvery { attemptDao.getRecent("learner_42", "concept_trig", limit = 1000) } returns emptyList()
+        coEvery { conceptDao.getById("concept_trig") } returns ConceptEntity("concept_trig", "Math", 10, null, "Trigonometry")
+        coEvery { contentAvailabilityProvider.isPackageAvailable("pkg_trigonometry_v2") } returns true
+
+        val result = customEngine.processAttempt("learner_42", attempt)
+
+        assertThat(result.recommendation?.contentPackageId).isEqualTo("pkg_trigonometry_v2")
+    }
+
+    @Test
+    fun `getRecommendation retrieves latest stored recommendation`() = runTest {
+        val repo: com.hackx.ruraledtech.domain.repository.RecommendationRepository = mockk()
+        val expectedRec = com.hackx.ruraledtech.domain.model.Recommendation(
+            learnerId = "learner_42",
+            conceptId = "concept_math",
+            conceptName = "Math Concept",
+            mastery = 0.8f,
+            recommendationType = RecommendationType.PRACTICE,
+            contentPackageId = "pkg_math",
+            targetLessonId = "lesson_m1",
+            difficulty = 0.5f,
+            generatedAt = 5000L,
+        )
+        coEvery { repo.getLatestRecommendation("learner_42") } returns expectedRec
+
+        val customEngine = AdaptiveLearningEngineImpl(
+            attemptDao = attemptDao,
+            questionDao = questionDao,
+            conceptDao = conceptDao,
+            masteryCalculator = masteryCalculator,
+            recommendationEngine = recommendationEngine,
+            contentAvailabilityProvider = contentAvailabilityProvider,
+            clock = clock,
+            recommendationRepository = repo,
+        )
+
+        val rec = customEngine.getRecommendation("learner_42")
+        assertThat(rec).isEqualTo(expectedRec)
+    }
 }
