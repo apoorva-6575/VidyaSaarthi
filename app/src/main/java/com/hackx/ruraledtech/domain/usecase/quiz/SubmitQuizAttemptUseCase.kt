@@ -19,6 +19,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import javax.inject.Inject
 
+data class QuizAttemptOutcome(val correct: Boolean, val learningResult: LearningResult)
+
 /**
  * The single orchestration point for PS section 15-19: evaluate offline, persist the
  * attempt before anything else touches the network, create a durable sync event, then hand
@@ -40,7 +42,7 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         question: Question,
         selectedOptionIds: List<String>,
         responseTimeMs: Long,
-    ): LearningResult {
+    ): QuizAttemptOutcome {
         val correct = evaluateAnswer(question, selectedOptionIds)
         val deviceId = deviceIdProvider.get()
 
@@ -73,7 +75,7 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         val result = learningEngine.processAttempt(learnerId, attempt)
         progressRepository.upsertMastery(result.updatedMastery)
         result.recommendation?.let { recommendationRepository.saveRecommendation(it) }
-        return result
+        return QuizAttemptOutcome(correct = correct, learningResult = result)
     }
 
     /** Deterministic, local, no LLM — PS section 6's "runtime adaptive engine must be deterministic." */
