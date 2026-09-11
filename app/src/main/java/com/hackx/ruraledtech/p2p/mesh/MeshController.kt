@@ -78,6 +78,7 @@ class MeshController(
             is P2PMessage.Request -> handleIncomingRequest(endpointId, message)
             is P2PMessage.Offer -> handleIncomingOffer(endpointId, message)
             is P2PMessage.Accept -> Log.d(TAG, "Peer accepted our offer for ${message.packageId}. Ready to trigger TransferManager.")
+            is P2PMessage.PassportTransfer -> Log.d(TAG, "Received PassportTransfer from ${message.senderDeviceId}. Handling not yet implemented.")
         }
     }
 
