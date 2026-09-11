@@ -21,7 +21,7 @@ class SyncWorker @AssistedInject constructor(
     private val syncRepository: SyncRepository,
 ) : CoroutineWorker(context, params) {
 
-    override suspend fun doWork(): Result = when (val outcome = syncRepository.syncNow()) {
+    override suspend fun doWork(): Result = when (syncRepository.syncNow()) {
         is SyncOutcome.Deferred -> Result.retry()
         is SyncOutcome.Success -> Result.success()
         is SyncOutcome.PartialFailure -> Result.retry()

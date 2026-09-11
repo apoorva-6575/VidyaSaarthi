@@ -1,5 +1,6 @@
 package com.hackx.ruraledtech.feature.splash
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -24,11 +25,11 @@ fun SplashScreen(
         destination?.let(onDestinationReady)
     }
 
-    Scaffold { padding ->
+    Scaffold { _ ->
         Column(
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            verticalArrangement = Arrangement.Center,
         ) {
             Text("Rural EdTech", style = MaterialTheme.typography.headlineLarge)
             Text("Learning that doesn't wait for the internet", style = MaterialTheme.typography.bodyMedium)
