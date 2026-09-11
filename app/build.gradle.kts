@@ -107,6 +107,7 @@ dependencies {
 
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    implementation("com.google.android.gms:play-services-nearby:19.0.0")
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)

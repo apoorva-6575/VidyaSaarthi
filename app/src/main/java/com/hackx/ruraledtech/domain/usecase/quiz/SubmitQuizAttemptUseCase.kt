@@ -17,8 +17,11 @@ import com.hackx.ruraledtech.domain.repository.SyncRepository
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import com.hackx.ruraledtech.data.engine.DefaultAnswerEvaluator
 import com.hackx.ruraledtech.domain.engine.AnswerEvaluator
 import javax.inject.Inject
+
+data class QuizAttemptOutcome(val correct: Boolean, val learningResult: LearningResult)
 
 /**
  * The single orchestration point for PS section 15-19: evaluate offline, persist the
@@ -32,17 +35,17 @@ class SubmitQuizAttemptUseCase @Inject constructor(
     private val progressRepository: ProgressRepository,
     private val recommendationRepository: RecommendationRepository,
     private val learningEngine: LearningEngine,
-    private val answerEvaluator: AnswerEvaluator,
     private val idGenerator: IdGenerator,
     private val deviceIdProvider: DeviceIdProvider,
     private val clock: AppClock,
+    private val answerEvaluator: AnswerEvaluator = DefaultAnswerEvaluator(),
 ) {
     suspend operator fun invoke(
         learnerId: String,
         question: Question,
         selectedOptionIds: List<String>,
         responseTimeMs: Long,
-    ): LearningResult {
+    ): QuizAttemptOutcome {
         val evalResult = answerEvaluator.evaluate(question, selectedOptionIds)
         val correct = evalResult.correct
         val deviceId = deviceIdProvider.get()
@@ -76,7 +79,7 @@ class SubmitQuizAttemptUseCase @Inject constructor(
         val result = learningEngine.processAttempt(learnerId, attempt)
         progressRepository.upsertMastery(result.updatedMastery)
         result.recommendation?.let { recommendationRepository.saveRecommendation(it) }
-        return result
+        return QuizAttemptOutcome(correct = correct, learningResult = result)
     }
 
     private fun quizAttemptPayload(questionId: String, correct: Boolean): String =

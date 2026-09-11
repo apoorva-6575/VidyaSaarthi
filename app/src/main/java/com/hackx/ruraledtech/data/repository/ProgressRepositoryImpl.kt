@@ -25,8 +25,7 @@ class ProgressRepositoryImpl @Inject constructor(
 
     override fun observeSubjectProgress(learnerId: String): Flow<List<SubjectProgress>> =
         progressDao.observeForLearner(learnerId).map { progressList ->
-            val bySubjectLesson = progressList.associateBy { it.lessonId }
-            bySubjectLesson.values
+            progressList
                 .mapNotNull { progress -> lessonDao.getById(progress.lessonId)?.subject?.let { it to progress } }
                 .groupBy({ it.first }, { it.second })
                 .map { (subject, entries) ->
