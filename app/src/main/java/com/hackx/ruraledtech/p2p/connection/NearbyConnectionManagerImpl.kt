@@ -147,7 +147,6 @@ class NearbyConnectionManagerImpl @Inject constructor(
     override fun startAdvertising(deviceName: String) {
         val options = AdvertisingOptions.Builder()
             .setStrategy(strategy)
-            .setDisruptiveUpgrade(false)
             .build()
         Log.d(TAG, "[P2P][ADVERTISE] Starting advertising name=$deviceName serviceId=$serviceId strategy=P2P_CLUSTER")
         connectionsClient.startAdvertising(deviceName, serviceId, connectionLifecycleCallback, options)
