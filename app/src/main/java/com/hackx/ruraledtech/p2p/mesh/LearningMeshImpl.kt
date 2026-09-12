@@ -23,25 +23,38 @@ class LearningMeshImpl @Inject constructor(
 
     override fun startMesh() {
         if (_isMeshActive.value) {
-            Log.d(TAG, "Mesh already active; ignoring duplicate startMesh call.")
+            Log.d(
+                TAG,
+                "[P2P][MESH_START] Mesh already active; ignoring duplicate start."
+            )
             return
         }
-        Log.d(TAG, "Starting Learning Mesh... Advertising & Discovering.")
-        _isMeshActive.value = true
+
+        Log.d(
+            TAG,
+            "[P2P][MESH_START] " +
+                "localEndpoint=${connectionManager.getLocalEndpointName()}"
+        )
+
         meshController.syncManifestFromDatabase()
-        connectionManager.startAdvertising("RuralEdTech-Node")
+
+        _isMeshActive.value = true
+
+        connectionManager.startAdvertising(
+            connectionManager.getLocalEndpointName()
+        )
+
         connectionManager.startDiscovery()
     }
 
     override fun stopMesh() {
-        if (!_isMeshActive.value) {
-            Log.d(TAG, "Mesh already inactive; ignoring duplicate stopMesh call.")
-            return
-        }
-        Log.d(TAG, "Stopping Learning Mesh.")
+        Log.d(TAG, "[P2P][MESH_STOP] Resetting Learning Mesh.")
+
         _isMeshActive.value = false
-        connectionManager.stopAdvertising()
+
         connectionManager.stopDiscovery()
+        connectionManager.stopAdvertising()
+        connectionManager.stopAllEndpoints()
     }
 
     override suspend fun requestContent(requirement: ContentRequirement): Boolean {

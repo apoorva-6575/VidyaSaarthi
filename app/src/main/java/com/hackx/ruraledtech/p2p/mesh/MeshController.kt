@@ -38,6 +38,9 @@ class MeshController(
 
     private val TAG = "MeshController"
 
+    private val localEndpointName: String =
+        connectionManager.getLocalEndpointName()
+
     private var localManifest = ContentManifest(deviceId, 1, emptyList())
     private val connectedEndpoints = mutableSetOf<String>()
     private val pendingConnections = mutableSetOf<String>()
@@ -130,18 +133,82 @@ class MeshController(
 
     // --- TRANSPORT LIFECYCLE ---
 
-    override fun onPeerDiscovered(endpointId: String, endpointName: String) {
-        Log.d(TAG, "[P2P][DISCOVERED] Peer discovered: endpointId=$endpointId name=$endpointName")
+    override fun onPeerDiscovered(
+        endpointId: String,
+        endpointName: String
+    ) {
+        Log.d(
+            TAG,
+            "[P2P][DISCOVERED] " +
+                "endpointId=$endpointId " +
+                "remoteName=$endpointName " +
+                "localName=$localEndpointName"
+        )
+
+        // Only connect to RuralEdTech mesh nodes.
+        if (!endpointName.startsWith("RuralEdTech-Node-")) {
+            Log.d(
+                TAG,
+                "[P2P][DISCOVERED][IGNORED] " +
+                    "Unknown endpoint name=$endpointName"
+            )
+            return
+        }
+
         if (connectedEndpoints.contains(endpointId)) {
-            Log.d(TAG, "[P2P] Already connected to $endpointId; ignoring discovery.")
+            Log.d(
+                TAG,
+                "[P2P][DISCOVERED][IGNORED] Already connected: $endpointId"
+            )
             return
         }
+
         if (pendingConnections.contains(endpointId)) {
-            Log.d(TAG, "[P2P] Connection to $endpointId is already pending; ignoring duplicate discovery.")
+            Log.d(
+                TAG,
+                "[P2P][DISCOVERED][IGNORED] Connection already pending: $endpointId"
+            )
             return
         }
+
+        /*
+         * Deterministic initiator election:
+         *
+         * Only the node with the lexicographically smaller
+         * endpoint name starts requestConnection().
+         *
+         * Example:
+         *   A = RuralEdTech-Node-123ABC
+         *   B = RuralEdTech-Node-9F02DE
+         *
+         * A initiates.
+         * B waits and only accepts.
+         */
+        if (localEndpointName >= endpointName) {
+            Log.d(
+                TAG,
+                "[P2P][ELECTION] " +
+                    "localName=$localEndpointName " +
+                    "remoteName=$endpointName " +
+                    "=> REMOTE INITIATES. Waiting."
+            )
+            return
+        }
+
+        Log.d(
+            TAG,
+            "[P2P][ELECTION] " +
+                "localName=$localEndpointName " +
+                "remoteName=$endpointName " +
+                "=> LOCAL INITIATES."
+        )
+
         pendingConnections.add(endpointId)
-        connectionManager.requestConnection(endpointId, endpointName)
+
+        connectionManager.requestConnection(
+            endpointId,
+            endpointName
+        )
     }
 
     override fun onPeerLost(endpointId: String) {
@@ -173,6 +240,43 @@ class MeshController(
             broadcastLocalManifest(endpointId)
             broadcastLearnerSync(endpointId)
         }
+    }
+
+    override fun onConnectionRequestFailed(endpointId: String) {
+        Log.e(
+            TAG,
+            "[P2P][REQUEST_FAILED] " +
+                "Removing $endpointId from pending connections."
+        )
+
+        pendingConnections.remove(endpointId)
+    }
+
+    override fun onTransportError(message: String) {
+        Log.e(TAG, "[P2P][TRANSPORT_ERROR] $message")
+    }
+
+    override fun onConnectionRejected(endpointId: String) {
+        Log.w(
+            TAG,
+            "[P2P][CONNECTION_REJECTED] endpoint=$endpointId"
+        )
+
+        pendingConnections.remove(endpointId)
+        connectedEndpoints.remove(endpointId)
+
+        _connectedEndpointsFlow.value =
+            connectedEndpoints.toSet()
+    }
+
+    override fun onDisconnected(endpointId: String) {
+        Log.d(TAG, "[P2P][DISCONNECTED] Disconnected from $endpointId")
+
+        pendingConnections.remove(endpointId)
+        connectedEndpoints.remove(endpointId)
+
+        _connectedEndpointsFlow.value =
+            connectedEndpoints.toSet()
     }
 
     fun broadcastLearnerSync(endpointId: String? = null) {
@@ -223,17 +327,6 @@ class MeshController(
         }
     }
 
-    override fun onConnectionRejected(endpointId: String) {
-        Log.w(TAG, "[P2P][CONNECTION_REJECTED] Connection rejected by $endpointId")
-        pendingConnections.remove(endpointId)
-    }
-
-    override fun onDisconnected(endpointId: String) {
-        Log.d(TAG, "[P2P][DISCONNECTED] Disconnected from $endpointId")
-        pendingConnections.remove(endpointId)
-        connectedEndpoints.remove(endpointId)
-        _connectedEndpointsFlow.value = connectedEndpoints.toSet()
-    }
 
     override fun onFilePayloadReceived(endpointId: String, payloadId: Long) {
         Log.d(TAG, "File payload $payloadId received from $endpointId")

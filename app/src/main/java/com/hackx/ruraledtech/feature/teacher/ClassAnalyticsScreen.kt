@@ -86,15 +86,65 @@ fun ClassAnalyticsScreen(
     var reportContent by remember { mutableStateOf("") }
     var lastSharedPackage by remember { mutableStateOf<String?>(null) }
 
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
-        val missing = P2PPermissions.getMissingPermissions(context)
-        if (missing.isEmpty()) {
-            viewModel.startMesh()
-        } else {
-            android.widget.Toast.makeText(context, "Bluetooth & Nearby permissions are required for P2P mesh", android.widget.Toast.LENGTH_LONG).show()
-        }
+    var pendingSharePackageId by remember {
+        mutableStateOf<String?>(null)
     }
+
+    val context = LocalContext.current
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { _ ->
+
+            val missing =
+                P2PPermissions.getMissingPermissions(context)
+
+            if (missing.isEmpty()) {
+
+                if (!P2PPermissions.isBluetoothEnabled(context)) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Please turn on Bluetooth.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return@rememberLauncherForActivityResult
+                }
+
+                if (!P2PPermissions.isWifiEnabled(context)) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Please turn on Wi-Fi.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return@rememberLauncherForActivityResult
+                }
+
+                if (!P2PPermissions.isLocationEnabled(context)) {
+                    android.widget.Toast.makeText(
+                        context,
+                        "Please turn on Location for nearby device discovery.",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                    return@rememberLauncherForActivityResult
+                }
+
+                viewModel.startMesh()
+
+                pendingSharePackageId?.let { packageId ->
+                    viewModel.sharePackageToClass(packageId)
+                    lastSharedPackage = packageId
+                }
+
+                pendingSharePackageId = null
+
+            } else {
+                android.widget.Toast.makeText(
+                    context,
+                    "Bluetooth & Nearby permissions are required for P2P mesh",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
     val isMeshActive = meshState != MeshState.OFFLINE && meshState != MeshState.ERROR
 
@@ -260,9 +310,44 @@ fun ClassAnalyticsScreen(
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
-                                            Button(
+                                             Button(
                                                 onClick = {
-                                                    permissionLauncher.launch(P2PPermissions.required)
+                                                    pendingSharePackageId = pkg.packageId
+
+                                                    if (!P2PPermissions.hasAllPermissions(context)) {
+                                                        permissionLauncher.launch(
+                                                            P2PPermissions.required
+                                                        )
+                                                        return@Button
+                                                    }
+
+                                                    if (!P2PPermissions.isBluetoothEnabled(context)) {
+                                                        android.widget.Toast.makeText(
+                                                            context,
+                                                            "Please turn on Bluetooth.",
+                                                            android.widget.Toast.LENGTH_LONG
+                                                        ).show()
+                                                        return@Button
+                                                    }
+
+                                                    if (!P2PPermissions.isWifiEnabled(context)) {
+                                                        android.widget.Toast.makeText(
+                                                            context,
+                                                            "Please turn on Wi-Fi.",
+                                                            android.widget.Toast.LENGTH_LONG
+                                                        ).show()
+                                                        return@Button
+                                                    }
+
+                                                    if (!P2PPermissions.isLocationEnabled(context)) {
+                                                        android.widget.Toast.makeText(
+                                                            context,
+                                                            "Please turn on Location for nearby device discovery.",
+                                                            android.widget.Toast.LENGTH_LONG
+                                                        ).show()
+                                                        return@Button
+                                                    }
+
                                                     viewModel.startMesh()
                                                     viewModel.sharePackageToClass(pkg.packageId)
                                                     lastSharedPackage = pkg.packageId

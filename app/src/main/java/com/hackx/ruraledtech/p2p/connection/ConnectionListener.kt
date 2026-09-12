@@ -8,6 +8,8 @@ interface ConnectionListener {
     fun onConnectionInitiated(endpointId: String, endpointName: String, authToken: String)
     fun onConnectionAccepted(endpointId: String)
     fun onConnectionRejected(endpointId: String)
+    fun onConnectionRequestFailed(endpointId: String) {}
+    fun onTransportError(message: String) {}
     fun onDisconnected(endpointId: String)
     
     // Payload Events

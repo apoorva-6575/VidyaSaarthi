@@ -82,7 +82,19 @@ fun ContentLibraryScreen(
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
         val missing = P2PPermissions.getMissingPermissions(context)
         if (missing.isEmpty()) {
-            android.util.Log.d("ContentLibraryScreen", "[P2P][PERMISSION] All required P2P permissions granted. Starting mesh.")
+            android.util.Log.d("ContentLibraryScreen", "[P2P][PERMISSION] All required P2P permissions granted.")
+            if (!P2PPermissions.isBluetoothEnabled(context)) {
+                android.widget.Toast.makeText(context, "Please turn on Bluetooth.", android.widget.Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
+            if (!P2PPermissions.isWifiEnabled(context)) {
+                android.widget.Toast.makeText(context, "Please turn on Wi-Fi.", android.widget.Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
+            if (!P2PPermissions.isLocationEnabled(context)) {
+                android.widget.Toast.makeText(context, "Please turn on Location for nearby device discovery.", android.widget.Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
             viewModel.findNearbyDevice()
         } else {
             android.util.Log.e("ContentLibraryScreen", "[P2P][PERMISSION_DENIED] Cannot start mesh. Missing permissions: $missing")
@@ -91,10 +103,28 @@ fun ContentLibraryScreen(
     }
     val onStartMesh = remember(context) {
         {
-            if (P2PPermissions.hasAllPermissions(context)) {
-                viewModel.findNearbyDevice()
-            } else {
+            if (!P2PPermissions.hasAllPermissions(context)) {
                 permissionLauncher.launch(P2PPermissions.required)
+            } else if (!P2PPermissions.isBluetoothEnabled(context)) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Please turn on Bluetooth.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } else if (!P2PPermissions.isWifiEnabled(context)) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Please turn on Wi-Fi.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } else if (!P2PPermissions.isLocationEnabled(context)) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Please turn on Location for nearby device discovery.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            } else {
+                viewModel.findNearbyDevice()
             }
         }
     }

@@ -2,11 +2,12 @@ package com.hackx.ruraledtech.p2p.connection
 
 import android.content.Context
 import android.net.Uri
+import android.provider.Settings
 import android.util.Log
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
-
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.util.UUID
 import javax.inject.Inject
 
 class NearbyConnectionManagerImpl @Inject constructor(
@@ -18,6 +19,30 @@ class NearbyConnectionManagerImpl @Inject constructor(
     private val serviceId = "com.hackx.ruraledtech.mesh"
     
     private val TAG = "NearbyTransport"
+
+    private val _localEndpointName: String by lazy {
+        val prefs = context.getSharedPreferences(
+            "p2p_mesh_prefs",
+            Context.MODE_PRIVATE
+        )
+
+        val storedId = prefs.getString("node_id", null)
+
+        val nodeId = storedId ?: UUID.randomUUID().toString().replace("-", "")
+            .take(6)
+            .uppercase()
+            .also {
+                prefs.edit()
+                    .putString("node_id", it)
+                    .apply()
+            }
+
+        "RuralEdTech-Node-$nodeId"
+    }
+
+    override fun getLocalEndpointName(): String {
+        return _localEndpointName
+    }
 
     private val incomingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload>()
     private var listener: ConnectionListener? = null
@@ -145,16 +170,50 @@ class NearbyConnectionManagerImpl @Inject constructor(
     // --- COMMAND IMPLEMENTATIONS ---
 
     override fun startAdvertising(deviceName: String) {
+        val actualDeviceName = _localEndpointName
+
         val options = AdvertisingOptions.Builder()
             .setStrategy(strategy)
             .build()
-        Log.d(TAG, "[P2P][ADVERTISE] Starting advertising name=$deviceName serviceId=$serviceId strategy=P2P_CLUSTER")
-        connectionsClient.startAdvertising(deviceName, serviceId, connectionLifecycleCallback, options)
-            .addOnSuccessListener { Log.d(TAG, "[P2P][ADVERTISE] Advertising started successfully: $deviceName") }
+
+        Log.d(
+            TAG,
+            "[P2P][ADVERTISE] Starting advertising " +
+                "name=$actualDeviceName " +
+                "serviceId=$serviceId " +
+                "strategy=P2P_CLUSTER"
+        )
+
+        connectionsClient
+            .startAdvertising(
+                actualDeviceName,
+                serviceId,
+                connectionLifecycleCallback,
+                options
+            )
+            .addOnSuccessListener {
+                Log.d(
+                    TAG,
+                    "[P2P][ADVERTISE][SUCCESS] name=$actualDeviceName"
+                )
+            }
             .addOnFailureListener { e ->
-                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
-                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
-                Log.e(TAG, "[P2P][ADVERTISE][FAILED] statusCode=$statusCode status=$statusStr error=${e.message}", e)
+                val statusCode =
+                    (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+
+                val statusStr =
+                    ConnectionsStatusCodes.getStatusCodeString(statusCode)
+
+                Log.e(
+                    TAG,
+                    "[P2P][ADVERTISE][FAILED] " +
+                        "statusCode=$statusCode " +
+                        "status=$statusStr " +
+                        "error=${e.message}",
+                    e
+                )
+
+                listener?.onTransportError("Advertising failed: $statusStr")
             }
     }
 
@@ -176,6 +235,7 @@ class NearbyConnectionManagerImpl @Inject constructor(
                 val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
                 val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
                 Log.e(TAG, "[P2P][DISCOVERY][FAILED] statusCode=$statusCode status=$statusStr error=${e.message}", e)
+                listener?.onTransportError("Discovery failed: $statusStr")
             }
     }
 
@@ -188,15 +248,49 @@ class NearbyConnectionManagerImpl @Inject constructor(
         }
     }
 
-    override fun requestConnection(endpointId: String, endpointName: String) {
-        val localDeviceName = "RuralEdTech-Node"
-        Log.d(TAG, "[P2P][REQUEST] Requesting connection to remote endpoint=$endpointId (remoteName=$endpointName) using localName=$localDeviceName")
-        connectionsClient.requestConnection(localDeviceName, endpointId, connectionLifecycleCallback)
-            .addOnSuccessListener { Log.d(TAG, "[P2P][REQUEST] Connection request successfully sent to $endpointId") }
+    override fun requestConnection(
+        endpointId: String,
+        endpointName: String
+    ) {
+        Log.d(
+            TAG,
+            "[P2P][REQUEST] Requesting connection " +
+                "localName=$_localEndpointName " +
+                "remoteEndpoint=$endpointId " +
+                "remoteName=$endpointName"
+        )
+
+        connectionsClient
+            .requestConnection(
+                _localEndpointName,
+                endpointId,
+                connectionLifecycleCallback
+            )
+            .addOnSuccessListener {
+                Log.d(
+                    TAG,
+                    "[P2P][REQUEST][SUCCESS] " +
+                        "remoteEndpoint=$endpointId"
+                )
+            }
             .addOnFailureListener { e ->
-                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
-                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
-                Log.w(TAG, "[P2P][REQUEST_FAILED] Connection request to $endpointId failed: statusCode=$statusCode status=$statusStr error=${e.message}")
+                val statusCode =
+                    (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+
+                val statusStr =
+                    ConnectionsStatusCodes.getStatusCodeString(statusCode)
+
+                Log.e(
+                    TAG,
+                    "[P2P][REQUEST][FAILED] " +
+                        "endpoint=$endpointId " +
+                        "statusCode=$statusCode " +
+                        "status=$statusStr " +
+                        "error=${e.message}",
+                    e
+                )
+
+                listener?.onConnectionRequestFailed(endpointId)
             }
     }
 
@@ -219,6 +313,15 @@ class NearbyConnectionManagerImpl @Inject constructor(
     override fun disconnect(endpointId: String) {
         Log.d(TAG, "[P2P][DISCONNECT] Disconnecting from endpoint=$endpointId")
         connectionsClient.disconnectFromEndpoint(endpointId)
+    }
+
+    override fun stopAllEndpoints() {
+        try {
+            Log.d(TAG, "[P2P][RESET] Stopping all endpoints")
+            connectionsClient.stopAllEndpoints()
+        } catch (e: Exception) {
+            Log.w(TAG, "[P2P][RESET] stopAllEndpoints warning", e)
+        }
     }
 
     override fun sendBytes(endpointId: String, bytes: ByteArray) {

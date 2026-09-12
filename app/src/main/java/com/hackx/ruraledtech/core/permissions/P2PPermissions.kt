@@ -1,6 +1,10 @@
 package com.hackx.ruraledtech.core.permissions
 
 import android.Manifest
+import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.location.LocationManager
+import android.net.wifi.WifiManager
 import android.os.Build
 
 /**
@@ -27,7 +31,7 @@ object P2PPermissions {
         }
     }.toTypedArray()
 
-    fun hasAllPermissions(context: android.content.Context): Boolean {
+    fun hasAllPermissions(context: Context): Boolean {
         return required.all { permission ->
             androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
@@ -36,12 +40,46 @@ object P2PPermissions {
         }
     }
 
-    fun getMissingPermissions(context: android.content.Context): List<String> {
+    fun getMissingPermissions(context: Context): List<String> {
         return required.filter { permission ->
             androidx.core.content.ContextCompat.checkSelfPermission(
                 context,
                 permission
             ) != android.content.pm.PackageManager.PERMISSION_GRANTED
         }
+    }
+
+    fun isBluetoothEnabled(context: Context): Boolean {
+        val bluetoothManager =
+            context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+
+        return bluetoothManager.adapter?.isEnabled == true
+    }
+
+    fun isWifiEnabled(context: Context): Boolean {
+        val wifiManager =
+            context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+
+        return wifiManager.isWifiEnabled
+    }
+
+    fun isLocationEnabled(context: Context): Boolean {
+        val locationManager =
+            context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            locationManager.isLocationEnabled
+        } else {
+            @Suppress("DEPRECATION")
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        }
+    }
+
+    fun isDeviceReadyForNearby(context: Context): Boolean {
+        return hasAllPermissions(context) &&
+            isBluetoothEnabled(context) &&
+            isWifiEnabled(context) &&
+            isLocationEnabled(context)
     }
 }
