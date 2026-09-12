@@ -18,4 +18,5 @@ interface ConnectionListener {
     fun onFileTransferProgress(endpointId: String, payloadId: Long, progressPercent: Int)
     fun onFileTransferComplete(endpointId: String, payloadId: Long, file: File)
     fun onFileTransferFailed(endpointId: String, payloadId: Long)
+    fun onOutgoingFileTransferComplete(endpointId: String, payloadId: Long) {}
 }

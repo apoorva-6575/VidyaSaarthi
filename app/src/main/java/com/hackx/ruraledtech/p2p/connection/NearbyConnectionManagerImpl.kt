@@ -44,7 +44,12 @@ class NearbyConnectionManagerImpl @Inject constructor(
         return _localEndpointName
     }
 
-    private val incomingFilePayloads = java.util.concurrent.ConcurrentHashMap<Long, Payload>()
+    private val incomingFilePayloads =
+        java.util.concurrent.ConcurrentHashMap<Long, Payload>()
+
+    private val completedBeforeReceived =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+
     private var listener: ConnectionListener? = null
 
     override fun setListener(listener: ConnectionListener) {
@@ -99,71 +104,203 @@ class NearbyConnectionManagerImpl @Inject constructor(
 
     // 3. PAYLOAD CALLBACKS (Data Transfer)
     private val payloadCallback = object : PayloadCallback() {
-        override fun onPayloadReceived(endpointId: String, payload: Payload) {
+        override fun onPayloadReceived(
+            endpointId: String,
+            payload: Payload
+        ) {
             when (payload.type) {
                 Payload.Type.BYTES -> {
                     payload.asBytes()?.let {
-                        Log.d(TAG, "[P2P][BYTES_RECEIVED] from endpoint=$endpointId size=${it.size} bytes")
+                        Log.d(
+                            TAG,
+                            "[P2P][BYTES_RECEIVED] from=$endpointId size=${it.size}"
+                        )
                         listener?.onBytesReceived(endpointId, it)
                     }
                 }
                 Payload.Type.FILE -> {
-                    Log.d(TAG, "[P2P][FILE_RECEIVED] Incoming file payload detected: payloadId=${payload.id} from endpoint=$endpointId")
+                    Log.d(
+                        TAG,
+                        "[P2P][FILE_RECEIVED] " +
+                            "payloadId=${payload.id} from=$endpointId"
+                    )
+
                     incomingFilePayloads[payload.id] = payload
-                    listener?.onFilePayloadReceived(endpointId, payload.id)
+
+                    listener?.onFilePayloadReceived(
+                        endpointId,
+                        payload.id
+                    )
+
+                    if (completedBeforeReceived.remove(payload.id)) {
+                        processCompletedFilePayload(
+                            endpointId,
+                            payload.id,
+                            payload
+                        )
+                    }
                 }
             }
         }
 
-        override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
+        override fun onPayloadTransferUpdate(
+            endpointId: String,
+            update: PayloadTransferUpdate
+        ) {
             when (update.status) {
                 PayloadTransferUpdate.Status.IN_PROGRESS -> {
-                    val progress = if (update.totalBytes > 0) {
-                        ((update.bytesTransferred.toFloat() / update.totalBytes) * 100).toInt()
-                    } else 0
-                    listener?.onFileTransferProgress(endpointId, update.payloadId, progress)
-                }
-                PayloadTransferUpdate.Status.SUCCESS -> {
-                    val payload = incomingFilePayloads.remove(update.payloadId)
-                    Log.d(TAG, "[P2P][FILE_RECEIVE_SUCCESS] Payload ${update.payloadId} transfer completed from $endpointId. Processing file...")
-                    val destinationFile = try {
-                        val javaFile = payload?.asFile()?.asJavaFile()
-                        if (javaFile != null && javaFile.exists() && javaFile.length() > 0) {
-                            javaFile
+                    val progress =
+                        if (update.totalBytes > 0) {
+                            (
+                                update.bytesTransferred.toFloat() /
+                                    update.totalBytes
+                                    * 100
+                            ).toInt()
                         } else {
-                            val payloadUri = payload?.asFile()?.asUri()
-                            if (payloadUri != null) {
-                                val incomingDir = java.io.File(context.cacheDir, "incoming").apply { if (!exists()) mkdirs() }
-                                val tempFile = java.io.File(incomingDir, "payload_${update.payloadId}.zip")
-                                context.contentResolver.openInputStream(payloadUri)?.use { input ->
-                                    java.io.FileOutputStream(tempFile).use { output ->
-                                        input.copyTo(output)
-                                    }
-                                }
-                                tempFile
-                            } else {
-                                null
-                            }
+                            0
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "[P2P][FILE_RECEIVE_ERROR] Exception processing received payload file ${update.payloadId}", e)
-                        null
+
+                    listener?.onFileTransferProgress(
+                        endpointId,
+                        update.payloadId,
+                        progress
+                    )
+                }
+
+                PayloadTransferUpdate.Status.SUCCESS -> {
+                    val payload =
+                        incomingFilePayloads.remove(update.payloadId)
+
+                    if (payload == null) {
+                        Log.d(
+                            TAG,
+                            "[P2P][FILE_SEND_SUCCESS] " +
+                                "Outgoing payload ${update.payloadId} " +
+                                "successfully delivered to $endpointId"
+                        )
+
+                        listener?.onOutgoingFileTransferComplete(
+                            endpointId,
+                            update.payloadId
+                        )
+
+                        return
                     }
 
-                    if (destinationFile != null && destinationFile.exists() && destinationFile.length() > 0) {
-                        Log.d(TAG, "[P2P][FILE_TRANSFER_COMPLETE] payloadId=${update.payloadId} file=${destinationFile.absolutePath} size=${destinationFile.length()} bytes")
-                        listener?.onFileTransferComplete(endpointId, update.payloadId, destinationFile)
-                    } else {
-                        Log.e(TAG, "[P2P][FILE_TRANSFER_FAILED] Payload ${update.payloadId} completed but file is invalid or zero-length")
-                        listener?.onFileTransferFailed(endpointId, update.payloadId)
-                    }
+                    processCompletedFilePayload(
+                        endpointId,
+                        update.payloadId,
+                        payload
+                    )
                 }
-                PayloadTransferUpdate.Status.FAILURE, PayloadTransferUpdate.Status.CANCELED -> {
-                    Log.e(TAG, "[P2P][FILE_TRANSFER_FAILED] Payload ${update.payloadId} status=${update.status}")
+
+                PayloadTransferUpdate.Status.FAILURE,
+                PayloadTransferUpdate.Status.CANCELED -> {
+                    Log.e(
+                        TAG,
+                        "[P2P][FILE_TRANSFER_FAILED] " +
+                            "payloadId=${update.payloadId} " +
+                            "endpoint=$endpointId " +
+                            "status=${update.status}"
+                    )
+
                     incomingFilePayloads.remove(update.payloadId)
-                    listener?.onFileTransferFailed(endpointId, update.payloadId)
+                    completedBeforeReceived.remove(update.payloadId)
+
+                    listener?.onFileTransferFailed(
+                        endpointId,
+                        update.payloadId
+                    )
                 }
             }
+        }
+    }
+
+    private fun processCompletedFilePayload(
+        endpointId: String,
+        payloadId: Long,
+        payload: Payload
+    ) {
+        Log.d(
+            TAG,
+            "[P2P][FILE_RECEIVE_SUCCESS] " +
+                "payloadId=$payloadId from=$endpointId"
+        )
+
+        val destinationFile = try {
+            val payloadUri = payload.asFile()?.asUri()
+
+            val incomingDir =
+                java.io.File(
+                    context.cacheDir,
+                    "incoming"
+                ).apply {
+                    if (!exists()) {
+                        mkdirs()
+                    }
+                }
+
+            val tempFile =
+                java.io.File(
+                    incomingDir,
+                    "payload_${payloadId}.zip"
+                )
+
+            if (payloadUri != null) {
+                context.contentResolver
+                    .openInputStream(payloadUri)
+                    ?.use { input ->
+                        java.io.FileOutputStream(tempFile)
+                            .use { output ->
+                                input.copyTo(output)
+                            }
+                    }
+            }
+
+            tempFile
+
+        } catch (e: Exception) {
+            Log.e(
+                TAG,
+                "[P2P][FILE_RECEIVE_ERROR] " +
+                    "Could not materialize payload $payloadId",
+                e
+            )
+
+            null
+        }
+
+        if (
+            destinationFile != null &&
+            destinationFile.exists() &&
+            destinationFile.length() > 0
+        ) {
+            Log.d(
+                TAG,
+                "[P2P][FILE_TRANSFER_COMPLETE] " +
+                    "payloadId=$payloadId " +
+                    "file=${destinationFile.absolutePath} " +
+                    "size=${destinationFile.length()}"
+            )
+
+            listener?.onFileTransferComplete(
+                endpointId,
+                payloadId,
+                destinationFile
+            )
+
+        } else {
+            Log.e(
+                TAG,
+                "[P2P][FILE_TRANSFER_FAILED] " +
+                    "payloadId=$payloadId completed but " +
+                    "received file is invalid"
+            )
+
+            listener?.onFileTransferFailed(
+                endpointId,
+                payloadId
+            )
         }
     }
 

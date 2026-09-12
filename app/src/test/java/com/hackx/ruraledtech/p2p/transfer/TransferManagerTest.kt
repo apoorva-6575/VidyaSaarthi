@@ -58,10 +58,13 @@ class TransferManagerTest {
 
     @Test
     fun `inbound transfer registers offer, maps payloadId, verifies hash and installs successfully`() = runTest {
-        val testContent = "Valid Package Data"
-        val expectedHash = computeHash(testContent)
-        val tempPackageFile = tempFolder.newFile("temp_incoming.pkg")
-        tempPackageFile.writeText(testContent)
+        val tempPackageFile = tempFolder.newFile("temp_incoming.zip")
+        java.util.zip.ZipOutputStream(java.io.FileOutputStream(tempPackageFile)).use { zos ->
+            zos.putNextEntry(java.util.zip.ZipEntry("manifest.json"))
+            zos.write("{}".toByteArray())
+            zos.closeEntry()
+        }
+        val expectedHash = computeFileHash(tempPackageFile)
 
         coEvery { legacyInstaller.install(any()) } returns true
 
@@ -165,6 +168,12 @@ class TransferManagerTest {
     private fun computeHash(text: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(text.toByteArray())
+        return hashBytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun computeFileHash(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashBytes = digest.digest(file.readBytes())
         return hashBytes.joinToString("") { "%02x".format(it) }
     }
 }

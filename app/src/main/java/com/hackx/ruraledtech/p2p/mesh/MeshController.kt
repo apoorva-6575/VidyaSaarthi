@@ -392,10 +392,43 @@ class MeshController(
 
     private fun handleIncomingRequest(endpointId: String, request: P2PMessage.Request) {
         coroutineScope.launch {
+            syncManifestFromDatabase()
+
             Log.d(
                 TAG,
-                "[P2P][REQUEST] Peer $endpointId requested packageId=${request.packageId} version=${request.version}"
+                "[P2P][REQUEST] Peer=$endpointId packageId=${request.packageId} requestedVersion=${request.version}"
             )
+
+            val existingTransfer =
+                transferManager?.getPendingOutboundTransfer(
+                    request.packageId,
+                    endpointId
+                )
+
+            if (existingTransfer != null) {
+                Log.d(
+                    TAG,
+                    "[P2P][REQUEST_DUPLICATE] Reusing existing outbound transfer transferId=${existingTransfer.transferId}"
+                )
+
+                val retryOffer = P2PMessage.Offer(
+                    messageId = UUID.randomUUID().toString(),
+                    senderDeviceId = deviceId,
+                    timestamp = System.currentTimeMillis(),
+                    packageId = existingTransfer.packageId,
+                    version = existingTransfer.version,
+                    expectedHash = existingTransfer.expectedHash,
+                    transferId = existingTransfer.transferId,
+                    sizeBytes = existingTransfer.sizeBytes
+                )
+
+                connectionManager.sendBytes(
+                    endpointId,
+                    ProtocolSerializer.serialize(retryOffer)
+                )
+
+                return@launch
+            }
 
             val zipFile =
                 packageStorageManager?.getPackageZipFile(
@@ -471,6 +504,35 @@ class MeshController(
         val stillNeeds = localPkg == null || offer.version > localPkg.version
 
         if (stillNeeds) {
+            val existingTransfer =
+                transferManager?.getPendingInboundTransfer(
+                    offer.packageId,
+                    endpointId
+                )
+
+            if (existingTransfer != null) {
+                Log.d(
+                    TAG,
+                    "[P2P][OFFER_DUPLICATE] Reusing inbound transfer transferId=${existingTransfer.transferId}"
+                )
+
+                val acceptMsg = P2PMessage.Accept(
+                    messageId = UUID.randomUUID().toString(),
+                    senderDeviceId = deviceId,
+                    timestamp = System.currentTimeMillis(),
+                    transferId = existingTransfer.transferId,
+                    packageId = existingTransfer.packageId,
+                    version = existingTransfer.version
+                )
+
+                connectionManager.sendBytes(
+                    endpointId,
+                    ProtocolSerializer.serialize(acceptMsg)
+                )
+
+                return
+            }
+
             transferManager?.registerInboundTransfer(
                 transferId = offer.transferId,
                 packageId = offer.packageId,
@@ -586,7 +648,19 @@ class MeshController(
     // --- FILE TRANSFER CALLBACKS ---
 
     override fun onFileTransferProgress(endpointId: String, payloadId: Long, progressPercent: Int) {
-        Log.d(TAG, "File transfer progress from $endpointId (payload $payloadId): $progressPercent%")
+        Log.d(
+            TAG,
+            "[P2P][FILE_PROGRESS] endpoint=$endpointId payload=$payloadId progress=$progressPercent%"
+        )
+        transferManager?.onFileTransferProgress(endpointId, payloadId, progressPercent)
+    }
+
+    override fun onOutgoingFileTransferComplete(endpointId: String, payloadId: Long) {
+        Log.d(
+            TAG,
+            "[P2P][FILE_SEND_SUCCESS] endpoint=$endpointId payload=$payloadId"
+        )
+        transferManager?.onOutgoingFileTransferComplete(payloadId)
     }
 
     override fun onFileTransferComplete(endpointId: String, payloadId: Long, file: File) {
