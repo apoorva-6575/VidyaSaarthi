@@ -9,6 +9,11 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -39,6 +44,11 @@ class TransferManager(
     private val pendingTransfersByTransferId = ConcurrentHashMap<String, PendingTransfer>()
     private val transferIdByPayloadId = ConcurrentHashMap<Long, String>()
 
+    private val _transfersMap = MutableStateFlow<Map<String, com.hackx.ruraledtech.p2p.mesh.TransferTask>>(emptyMap())
+    val transfersFlow: StateFlow<List<com.hackx.ruraledtech.p2p.mesh.TransferTask>> = _transfersMap
+        .map { it.values.toList() }
+        .stateIn(coroutineScope, SharingStarted.Eagerly, emptyList())
+
     /** Called when preparing to send an offered package. */
     fun registerOutboundTransfer(
         transferId: String,
@@ -60,6 +70,12 @@ class TransferManager(
             isOutbound = true
         )
         pendingTransfersByTransferId[transferId] = transfer
+        _transfersMap.value = _transfersMap.value + (transferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+            transferId = transferId,
+            packageId = packageId,
+            state = com.hackx.ruraledtech.p2p.mesh.TransferState.QUEUED,
+            progressPercent = 0
+        ))
         Log.d(TAG, "Registered outbound transfer $transferId for package $packageId")
     }
 
@@ -82,6 +98,12 @@ class TransferManager(
             isOutbound = false
         )
         pendingTransfersByTransferId[transferId] = transfer
+        _transfersMap.value = _transfersMap.value + (transferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+            transferId = transferId,
+            packageId = packageId,
+            state = com.hackx.ruraledtech.p2p.mesh.TransferState.QUEUED,
+            progressPercent = 0
+        ))
         Log.d(TAG, "Registered inbound transfer $transferId for package $packageId with expected hash $expectedHash")
     }
 
@@ -120,6 +142,22 @@ class TransferManager(
         return payloadId
     }
 
+    fun onFileTransferProgress(endpointId: String, payloadId: Long, progressPercent: Int) {
+        val transferId = transferIdByPayloadId[payloadId]
+            ?: pendingTransfersByTransferId.values.firstOrNull { it.endpointId == endpointId }?.transferId
+        if (transferId != null) {
+            val pending = pendingTransfersByTransferId[transferId]
+            if (pending != null) {
+                _transfersMap.value = _transfersMap.value + (transferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+                    transferId = transferId,
+                    packageId = pending.packageId,
+                    state = com.hackx.ruraledtech.p2p.mesh.TransferState.TRANSFERRING,
+                    progressPercent = progressPercent
+                ))
+            }
+        }
+    }
+
     fun getTransferByPayloadId(payloadId: Long): PendingTransfer? {
         val transferId = transferIdByPayloadId[payloadId] ?: return null
         return pendingTransfersByTransferId[transferId]
@@ -136,8 +174,16 @@ class TransferManager(
         tempFile: File,
         onSuccess: ((packageId: String, version: Int, checksum: String) -> Unit)? = null
     ) {
-        val transferId = transferIdByPayloadId.remove(payloadId)
-        val transfer = if (transferId != null) pendingTransfersByTransferId.remove(transferId) else null
+        var transferId = transferIdByPayloadId.remove(payloadId)
+        var transfer = if (transferId != null) pendingTransfersByTransferId.remove(transferId) else null
+
+        if (transfer == null) {
+            val candidate = pendingTransfersByTransferId.values.firstOrNull { it.endpointId == endpointId && !it.isOutbound }
+            if (candidate != null) {
+                transfer = pendingTransfersByTransferId.remove(candidate.transferId)
+                transferId = candidate.transferId
+            }
+        }
 
         if (transfer == null) {
             Log.e(TAG, "Received file payload $payloadId from $endpointId without matching transfer metadata. Deleting.")
@@ -145,23 +191,39 @@ class TransferManager(
             return
         }
 
+        val finalTransfer = transfer
+        val finalTransferId = transferId ?: finalTransfer.transferId
+
+        _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+            transferId = finalTransferId,
+            packageId = finalTransfer.packageId,
+            state = com.hackx.ruraledtech.p2p.mesh.TransferState.VERIFYING,
+            progressPercent = 100
+        ))
+
         coroutineScope.launch {
-            Log.d(TAG, "Verifying downloaded package ${transfer.packageId} (transfer $transferId)...")
-            val isValid = PackageVerifier.verifyFile(tempFile, transfer.expectedHash, ioDispatcher)
+            Log.d(TAG, "Verifying downloaded package ${finalTransfer.packageId} (transfer $finalTransferId)...")
+            val isValid = PackageVerifier.verifyFile(tempFile, finalTransfer.expectedHash, ioDispatcher)
 
             if (!isValid) {
-                Log.e(TAG, "Verification FAILED for ${transfer.packageId}. Tampered or corrupted file. Deleting.")
+                Log.e(TAG, "Verification FAILED for ${finalTransfer.packageId}. Tampered or corrupted file. Deleting.")
                 tempFile.delete()
+                _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+                    transferId = finalTransferId,
+                    packageId = finalTransfer.packageId,
+                    state = com.hackx.ruraledtech.p2p.mesh.TransferState.FAILED,
+                    progressPercent = 0
+                ))
                 return@launch
             }
 
-            Log.d(TAG, "Verification SUCCESS for ${transfer.packageId}. Storing for store-and-forward and installing.")
+            Log.d(TAG, "Verification SUCCESS for ${finalTransfer.packageId}. Storing for store-and-forward and installing.")
 
             // Persist ZIP for store-and-forward
-            packageStorageManager?.savePackageZip(transfer.packageId, tempFile)
+            packageStorageManager?.savePackageZip(finalTransfer.packageId, tempFile)
 
             val installDir = if (tempFile.name.endsWith(".zip", ignoreCase = true) || isZipArchive(tempFile)) {
-                val targetDir = File(tempFile.parentFile, "extracted_${transfer.packageId}_${System.currentTimeMillis()}")
+                val targetDir = File(tempFile.parentFile, "extracted_${finalTransfer.packageId}_${System.currentTimeMillis()}")
                 val extracted = packageStorageManager?.extractZip(tempFile, targetDir) ?: extractZipDirect(tempFile, targetDir)
                 if (extracted) targetDir else tempFile
             } else {
@@ -171,11 +233,23 @@ class TransferManager(
             val installedSuccessfully = performInstall(installDir.absolutePath)
 
             if (installedSuccessfully) {
-                Log.d(TAG, "Package ${transfer.packageId} installed successfully into Room database!")
-                onSuccess?.invoke(transfer.packageId, transfer.version, transfer.expectedHash)
-                onPackageInstalled?.invoke(transfer.packageId, transfer.version)
+                Log.d(TAG, "Package ${finalTransfer.packageId} installed successfully into Room database!")
+                _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+                    transferId = finalTransferId,
+                    packageId = finalTransfer.packageId,
+                    state = com.hackx.ruraledtech.p2p.mesh.TransferState.COMPLETED,
+                    progressPercent = 100
+                ))
+                onSuccess?.invoke(finalTransfer.packageId, finalTransfer.version, finalTransfer.expectedHash)
+                onPackageInstalled?.invoke(finalTransfer.packageId, finalTransfer.version)
             } else {
-                Log.e(TAG, "ContentInstaller failed to install package ${transfer.packageId}")
+                Log.e(TAG, "ContentInstaller failed to install package ${finalTransfer.packageId}")
+                _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+                    transferId = finalTransferId,
+                    packageId = finalTransfer.packageId,
+                    state = com.hackx.ruraledtech.p2p.mesh.TransferState.FAILED,
+                    progressPercent = 0
+                ))
             }
         }
     }

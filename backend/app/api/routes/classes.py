@@ -6,10 +6,45 @@ import uuid
 from app.api.dependencies import get_db, get_current_teacher
 from app.models.class_group import ClassGroup
 from app.models.learner import Learner, learner_class_association
-from app.schemas.learner import ClassGroupResponse, ClassGroupCreate
+from app.schemas.learner import ClassGroupResponse, ClassGroupCreate, JoinClassRequest
 from app.models.teacher import Teacher
 
 router = APIRouter()
+
+@router.post("/join", response_model=ClassGroupResponse)
+def join_class(join_req: JoinClassRequest, db: Session = Depends(get_db)):
+    clean_code = join_req.code.strip().lower()
+    if not clean_code:
+        raise HTTPException(status_code=400, detail="Class code is required")
+        
+    all_classes = db.query(ClassGroup).all()
+    matched_class = None
+    for c in all_classes:
+        if c.id.lower().startswith(clean_code) or c.id.lower() == clean_code:
+            matched_class = c
+            break
+            
+    if not matched_class:
+        raise HTTPException(status_code=404, detail="No class found matching that code")
+        
+    db_learner = db.query(Learner).filter(Learner.id == join_req.learner_id).first()
+    if not db_learner:
+        db_learner = Learner(
+            id=join_req.learner_id,
+            name=join_req.name or f"Learner {join_req.learner_id[:4]}",
+            grade=join_req.grade or matched_class.grade,
+            preferred_language=join_req.preferred_language or "en"
+        )
+        db.add(db_learner)
+        db.commit()
+        db.refresh(db_learner)
+        
+    if db_learner not in matched_class.learners:
+        matched_class.learners.append(db_learner)
+        db.commit()
+        db.refresh(matched_class)
+        
+    return matched_class
 
 @router.get("/", response_model=List[ClassGroupResponse])
 def get_classes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_teacher: Teacher = Depends(get_current_teacher)):

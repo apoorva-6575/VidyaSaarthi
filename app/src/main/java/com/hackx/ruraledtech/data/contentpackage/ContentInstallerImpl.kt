@@ -86,6 +86,7 @@ class ContentInstallerImpl @Inject constructor(
                     ListSerializer(ContentBlockDto.serializer()),
                     lesson.blocks.map { it.toContentBlockDto() },
                 ),
+                classId = lesson.classId ?: manifest.classId,
             )
         }
         val questionEntities = questionFiles.map { q ->

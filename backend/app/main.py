@@ -22,6 +22,10 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
+    from app.db.base_class import Base
+    import app.models  # noqa: F401
+    from app.db.session import engine
+    Base.metadata.create_all(bind=engine)
     from app.core.minio_client import ensure_buckets
     ensure_buckets()
 
@@ -39,11 +43,21 @@ def health_check():
         status["status"] = "error"
         
     try:
-        from app.core.minio_client import minio_client, CONTENT_BUCKET
-        minio_client.bucket_exists(CONTENT_BUCKET)
+        import socket
+        from app.core.config import settings
+        host, _, port = settings.MINIO_ENDPOINT.partition(":")
+        port_num = int(port) if port else 9000
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        result = sock.connect_ex((host, port_num))
+        sock.close()
+        if result != 0:
+            status["storage"] = "offline/local-mode"
+        else:
+            from app.core.minio_client import minio_client, CONTENT_BUCKET
+            minio_client.bucket_exists(CONTENT_BUCKET)
     except Exception as e:
         status["storage"] = f"error: {str(e)}"
-        status["status"] = "error"
         
     return status
 

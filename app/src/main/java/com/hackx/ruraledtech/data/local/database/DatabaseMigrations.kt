@@ -17,4 +17,12 @@ object DatabaseMigrations {
             db.execSQL("CREATE TABLE IF NOT EXISTS `class_analytics_cache` (`classId` TEXT NOT NULL, `generatedAt` TEXT NOT NULL, `classAveragesJson` TEXT NOT NULL, `learnerMetricsJson` TEXT NOT NULL, `cachedAt` INTEGER NOT NULL, PRIMARY KEY(`classId`))")
         }
     }
+
+    /** Adds classId (nullable) to lessons so materials can be tied to a specific class. */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE lessons ADD COLUMN classId TEXT DEFAULT NULL")
+        }
+    }
 }
+

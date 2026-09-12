@@ -48,6 +48,7 @@ data class TeacherHomeUiState(
     val teacherName: String = "",
     val isLoading: Boolean = false,
     val classes: List<ClassGroupEntity> = emptyList(),
+    val learnerCounts: Map<String, Int> = emptyMap(),
     val isOffline: Boolean = false,
     val error: String? = null,
     val creatingClass: Boolean = false,
@@ -98,6 +99,7 @@ class TeacherHomeViewModel @Inject constructor(
         viewModelScope.launch {
             val currentTeacherId = authStore.currentTeacherId() ?: return@launch
             loadDashboardFromCache(currentTeacherId)
+            refreshData()
         }
     }
 
@@ -165,12 +167,14 @@ class TeacherHomeViewModel @Inject constructor(
                     }
                     classGroupDao.insertAll(entities)
 
+                    val counts = mutableMapOf<String, Int>()
                     classes.forEach { classDto ->
+                        counts[classDto.id] = classDto.learners.size
                         classDto.learners.forEach { learnerDto ->
                             val learnerEntity = LearnerEntity(
                                 learnerId = learnerDto.id,
                                 name = learnerDto.name,
-                                grade = learnerDto.grade,
+                                grade = learnerDto.grade?.toIntOrNull() ?: 1,
                                 preferredLanguage = learnerDto.preferred_language,
                                 avatarKey = learnerDto.avatar_key,
                                 createdAt = System.currentTimeMillis(),
@@ -183,6 +187,7 @@ class TeacherHomeViewModel @Inject constructor(
                             )
                         }
                     }
+                    _uiState.value = _uiState.value.copy(learnerCounts = counts)
                 } else {
                     _uiState.value = _uiState.value.copy(error = "Failed to fetch classes")
                 }

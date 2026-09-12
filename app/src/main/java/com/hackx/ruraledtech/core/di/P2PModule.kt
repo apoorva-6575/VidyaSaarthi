@@ -23,6 +23,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+import com.hackx.ruraledtech.data.local.dao.ContentPackageDao
+
 @Module
 @InstallIn(SingletonComponent::class)
 object P2PModule {
@@ -77,12 +79,14 @@ object P2PModule {
         transferManager: TransferManager,
         passportManager: PassportManager,
         packageStorageManager: PackageStorageManager,
+        contentPackageDao: ContentPackageDao,
     ): MeshController {
         val controller = MeshController(
             connectionManager = connectionManager,
             reconciler = reconciler,
             transferManager = transferManager,
             packageStorageManager = packageStorageManager,
+            contentPackageDao = contentPackageDao,
         )
         connectionManager.setListener(controller)
         controller.setPassportManager(passportManager)
@@ -93,9 +97,10 @@ object P2PModule {
     @Singleton
     fun provideLearningMesh(
         connectionManager: P2PConnectionManager,
-        meshController: MeshController
+        meshController: MeshController,
+        transferManager: TransferManager,
     ): LearningMesh {
-        return LearningMeshImpl(connectionManager, meshController)
+        return LearningMeshImpl(connectionManager, meshController, transferManager)
     }
 
     /**

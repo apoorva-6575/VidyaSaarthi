@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.db.session import SessionLocal
+from app.db.base_class import Base
+from app.db.session import SessionLocal, engine
 from app.models.teacher import Teacher
 from app.models.learner import Learner
 from app.models.class_group import ClassGroup
@@ -13,6 +14,7 @@ from app.models.learning_event import LearningEvent
 from app.security.authentication import get_password_hash
 
 def seed_db():
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     
     # 1. Create a teacher

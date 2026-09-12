@@ -26,6 +26,7 @@ class MeshController(
     private val reconciler: ManifestReconciler,
     private val transferManager: TransferManager? = null,
     private val packageStorageManager: PackageStorageManager? = null,
+    private val contentPackageDao: com.hackx.ruraledtech.data.local.dao.ContentPackageDao? = null,
     private var passportManager: PassportManager? = null,
     private val deviceId: String = UUID.randomUUID().toString(),
     private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
@@ -45,7 +46,12 @@ class MeshController(
     private val _connectedEndpointsFlow = MutableStateFlow<Set<String>>(emptySet())
     val connectedEndpointsFlow: StateFlow<Set<String>> = _connectedEndpointsFlow.asStateFlow()
 
+    private val _availablePeerPackagesFlow = MutableStateFlow<List<PackageDescriptor>>(emptyList())
+    val availablePeerPackagesFlow: StateFlow<List<PackageDescriptor>> = _availablePeerPackagesFlow.asStateFlow()
+
     init {
+        syncManifestFromDatabase()
+
         transferManager?.onPackageInstalled = { packageId, version ->
             // A package installed via P2P transfer already got a REAL checksum from
             // TransferManager.onFileTransferComplete's onSuccess callback (fired just before
@@ -78,6 +84,35 @@ class MeshController(
         }
     }
 
+    fun syncManifestFromDatabase() {
+        coroutineScope.launch {
+            try {
+                val installed = contentPackageDao?.getInstalled() ?: emptyList()
+                val descriptors = installed.map { entity ->
+                    val zipFile = packageStorageManager?.getPackageZipFile(entity.packageId)
+                    val checksum = if (zipFile != null && zipFile.exists()) {
+                        packageStorageManager?.computeSha256(zipFile) ?: entity.checksum
+                    } else {
+                        entity.checksum
+                    }
+                    val size = zipFile?.length() ?: entity.sizeBytes
+                    PackageDescriptor(
+                        packageId = entity.packageId,
+                        version = entity.version,
+                        checksum = checksum,
+                        sizeBytes = size
+                    )
+                }
+                localManifest = localManifest.copy(
+                    packages = descriptors
+                )
+                Log.d(TAG, "Synced local manifest with ${descriptors.size} packages from Room DB for Mesh.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to sync local manifest from DB", e)
+            }
+        }
+    }
+
     fun setPassportManager(pm: PassportManager) {
         this.passportManager = pm
     }
@@ -91,7 +126,10 @@ class MeshController(
     // --- TRANSPORT LIFECYCLE ---
 
     override fun onPeerDiscovered(endpointId: String, endpointName: String) {
-        Log.d(TAG, "Peer discovered: $endpointId ($endpointName)")
+        Log.d(TAG, "Peer discovered: $endpointId ($endpointName). Requesting connection.")
+        if (!connectedEndpoints.contains(endpointId)) {
+            connectionManager.requestConnection(endpointId, endpointName)
+        }
     }
 
     override fun onPeerLost(endpointId: String) {
@@ -104,10 +142,22 @@ class MeshController(
     }
 
     override fun onConnectionAccepted(endpointId: String) {
-        Log.d(TAG, "Connection accepted with $endpointId. Sending local manifest.")
+        Log.d(TAG, "Connection accepted with $endpointId. Sending Hello & Local Manifest.")
         connectedEndpoints.add(endpointId)
         _connectedEndpointsFlow.value = connectedEndpoints.toSet()
-        broadcastLocalManifest(endpointId)
+
+        val helloMsg = P2PMessage.Hello(
+            messageId = UUID.randomUUID().toString(),
+            senderDeviceId = deviceId,
+            timestamp = System.currentTimeMillis(),
+            protocolVersion = 1
+        )
+        connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(helloMsg))
+
+        coroutineScope.launch {
+            syncManifestFromDatabase()
+            broadcastLocalManifest(endpointId)
+        }
     }
 
     private fun broadcastLocalManifest(endpointId: String? = null) {
@@ -137,6 +187,11 @@ class MeshController(
         _connectedEndpointsFlow.value = connectedEndpoints.toSet()
     }
 
+    override fun onFilePayloadReceived(endpointId: String, payloadId: Long) {
+        Log.d(TAG, "File payload $payloadId received from $endpointId")
+        transferManager?.associatePayloadId(endpointId, payloadId)
+    }
+
     // --- PROTOCOL ROUTING ---
 
     override fun onBytesReceived(endpointId: String, bytes: ByteArray) {
@@ -162,6 +217,7 @@ class MeshController(
     private fun handleRemoteManifest(endpointId: String, remoteManifest: ContentManifest) {
         Log.d(TAG, "Reconciling remote manifest from ${remoteManifest.deviceId}")
         val result = reconciler.reconcile(localManifest, remoteManifest)
+        _availablePeerPackagesFlow.value = result.toRequest
 
         result.toRequest.forEach { pkg ->
             Log.d(TAG, "Sending REQUEST for ${pkg.packageId} v${pkg.version} to $endpointId")
@@ -279,6 +335,50 @@ class MeshController(
             Log.d(TAG, "Started outbound file payload $payloadId for transfer ${accept.transferId}")
         } else {
             Log.e(TAG, "Failed to start outbound transfer for ${accept.transferId}")
+        }
+    }
+
+    fun broadcastPackage(packageId: String) {
+        coroutineScope.launch {
+            syncManifestFromDatabase()
+            val zipFile = packageStorageManager?.getPackageZipFile(packageId)
+            val checksum = if (zipFile != null && zipFile.exists()) {
+                packageStorageManager?.computeSha256(zipFile) ?: ""
+            } else ""
+            val size = zipFile?.length() ?: 4096L
+
+            val descriptor = localManifest.packages.firstOrNull { it.packageId == packageId }
+                ?: PackageDescriptor(packageId, 1, checksum, size)
+
+            val updated = (localManifest.packages.filterNot { it.packageId == packageId } + descriptor)
+            localManifest = localManifest.copy(packages = updated)
+            broadcastLocalManifest()
+
+            if (zipFile != null && zipFile.exists()) {
+                connectedEndpoints.forEach { endpointId ->
+                    val transferId = UUID.randomUUID().toString()
+                    transferManager?.registerOutboundTransfer(
+                        transferId = transferId,
+                        packageId = packageId,
+                        version = descriptor.version,
+                        expectedHash = descriptor.checksum,
+                        sizeBytes = size,
+                        fileUri = Uri.fromFile(zipFile),
+                        endpointId = endpointId
+                    )
+                    val offer = P2PMessage.Offer(
+                        messageId = UUID.randomUUID().toString(),
+                        senderDeviceId = deviceId,
+                        timestamp = System.currentTimeMillis(),
+                        packageId = packageId,
+                        version = descriptor.version,
+                        expectedHash = descriptor.checksum,
+                        transferId = transferId,
+                        sizeBytes = size
+                    )
+                    connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(offer))
+                }
+            }
         }
     }
 

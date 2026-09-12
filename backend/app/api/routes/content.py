@@ -67,6 +67,7 @@ def upload_content_package(
     file.file.seek(0)
 
     object_name = f"{package_id}/{version}/content.zip"
+    uploaded = False
     try:
         minio_client.put_object(
             CONTENT_BUCKET,
@@ -75,8 +76,17 @@ def upload_content_package(
             length=file_size,
             content_type=file.content_type
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload to storage: {str(e)}")
+        uploaded = True
+    except Exception:
+        # Fallback to local storage on disk
+        import os, shutil
+        storage_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "storage", package_id, str(version))
+        os.makedirs(storage_dir, exist_ok=True)
+        local_zip_path = os.path.join(storage_dir, "content.zip")
+        file.file.seek(0)
+        with open(local_zip_path, "wb") as f_out:
+            shutil.copyfileobj(file.file, f_out)
+        uploaded = True
 
     new_pkg = ContentPackage(
         id=package_id,
@@ -118,8 +128,23 @@ def download_package(
                 "Content-Disposition": f"attachment; filename=pkg_{package_id}_{version}.zip"
             }
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch from storage: {str(e)}")
+    except Exception:
+        import os
+        storage_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "storage", package_id, str(version))
+        local_zip_path = os.path.join(storage_dir, "content.zip")
+        if os.path.exists(local_zip_path):
+            def iterfile():
+                with open(local_zip_path, "rb") as f_in:
+                    while chunk := f_in.read(32 * 1024):
+                        yield chunk
+            return StreamingResponse(
+                iterfile(),
+                media_type="application/zip",
+                headers={
+                    "Content-Disposition": f"attachment; filename=pkg_{package_id}_{version}.zip"
+                }
+            )
+        raise HTTPException(status_code=500, detail="Package file not found in storage")
 
 @router.post("/{package_id}/{version}/revoke")
 def revoke_package(

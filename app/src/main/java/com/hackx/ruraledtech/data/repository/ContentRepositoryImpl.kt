@@ -29,10 +29,19 @@ class ContentRepositoryImpl @Inject constructor(
     override suspend fun getInstalledPackages(): List<ContentPackage> =
         contentPackageDao.getInstalled().map { it.toDomain() }
 
-    override suspend fun getSubjects(grade: Int): List<String> = lessonDao.getSubjects(grade)
+    override suspend fun getSubjects(grade: Int): List<String> {
+        val gradeSubjects = lessonDao.getSubjects(grade)
+        val allSubjects = lessonDao.getAllSubjects()
+        return (gradeSubjects + allSubjects).distinct().ifEmpty { listOf("Science", "Mathematics") }
+    }
 
-    override suspend fun getLessons(subject: String, grade: Int, language: String): List<Lesson> =
-        lessonDao.getForSubject(subject, grade, language).map { it.toDomain() }
+    override suspend fun getLessons(subject: String, grade: Int, language: String): List<Lesson> {
+        val exact = lessonDao.getForSubject(subject, grade, language).map { it.toDomain() }
+        if (exact.isNotEmpty()) return exact
+        val anyLang = lessonDao.getForSubjectAnyLanguage(subject, grade).map { it.toDomain() }
+        if (anyLang.isNotEmpty()) return anyLang
+        return lessonDao.getForSubjectAllGrades(subject).map { it.toDomain() }
+    }
 
     override suspend fun getLesson(lessonId: String): ContentLookupResult {
         val entity = lessonDao.getById(lessonId)

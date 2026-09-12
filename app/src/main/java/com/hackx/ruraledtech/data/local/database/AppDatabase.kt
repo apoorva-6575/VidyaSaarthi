@@ -47,7 +47,7 @@ import com.hackx.ruraledtech.data.local.entities.SyncEventEntity
         com.hackx.ruraledtech.data.local.entities.TeacherDashboardCacheEntity::class,
         com.hackx.ruraledtech.data.local.entities.ClassAnalyticsCacheEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)

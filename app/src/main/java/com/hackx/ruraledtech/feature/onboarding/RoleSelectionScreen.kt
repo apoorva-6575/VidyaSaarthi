@@ -31,7 +31,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 
 @Composable
 fun RoleSelectionScreen(
-    onRoleSelected: (UserRole) -> Unit,
+    onNavigate: (String) -> Unit,
     viewModel: RoleSelectionViewModel = hiltViewModel(),
 ) {
     Scaffold { padding ->
@@ -60,13 +60,13 @@ fun RoleSelectionScreen(
                     label = "Student",
                     icon = Icons.Filled.Person,
                     modifier = Modifier.weight(1f),
-                    onClick = { viewModel.selectRole(UserRole.STUDENT, onRoleSelected) },
+                    onClick = { viewModel.selectRole(UserRole.STUDENT, onNavigate) },
                 )
                 RoleCard(
                     label = "Teacher",
                     icon = Icons.Filled.School,
                     modifier = Modifier.weight(1f),
-                    onClick = { viewModel.selectRole(UserRole.TEACHER, onRoleSelected) },
+                    onClick = { viewModel.selectRole(UserRole.TEACHER, onNavigate) },
                 )
             }
         }

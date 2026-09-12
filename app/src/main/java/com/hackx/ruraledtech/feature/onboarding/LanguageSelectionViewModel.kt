@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hackx.ruraledtech.core.datastore.PreferencesManager
 import com.hackx.ruraledtech.domain.usecase.learner.EnsureTtsVoiceInstalledUseCase
+import com.hackx.ruraledtech.domain.voice.TextToSpeechEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -12,6 +13,7 @@ import javax.inject.Inject
 class LanguageSelectionViewModel @Inject constructor(
     private val preferencesManager: PreferencesManager,
     private val ensureTtsVoiceInstalledUseCase: EnsureTtsVoiceInstalledUseCase,
+    private val textToSpeechEngine: TextToSpeechEngine,
 ) : ViewModel() {
 
     fun selectLanguage(languageTag: String, onDone: () -> Unit) {
@@ -20,5 +22,9 @@ class LanguageSelectionViewModel @Inject constructor(
             ensureTtsVoiceInstalledUseCase(languageTag)
             onDone()
         }
+    }
+
+    fun openTtsSettings() {
+        textToSpeechEngine.openTtsSettings()
     }
 }

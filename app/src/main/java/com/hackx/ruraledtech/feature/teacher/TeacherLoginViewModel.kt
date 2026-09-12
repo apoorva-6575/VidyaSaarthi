@@ -90,8 +90,12 @@ class TeacherLoginViewModel @Inject constructor(
                 authStore.saveSession(token = token, teacherId = teacher.id, name = teacher.name, email = teacher.email)
                 _uiState.value = _uiState.value.copy(submitting = false)
                 onSuccess()
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(submitting = false, error = e.message ?: "Network error — check your connection")
+            } catch (_: Exception) {
+                // Don't show the raw IOException (which contains the backend IP) to the user.
+                _uiState.value = _uiState.value.copy(
+                    submitting = false,
+                    error = "Cannot reach the server. Ensure you are on the same Wi-Fi network as the server."
+                )
             }
         }
     }

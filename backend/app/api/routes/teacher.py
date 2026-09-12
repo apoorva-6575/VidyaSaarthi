@@ -77,11 +77,12 @@ def get_class_analytics(class_id: str, db: Session = Depends(get_db), current_te
         
     learner_ids = [learner.id for learner in db_class.learners]
     if not learner_ids:
+        from datetime import datetime
         return {
             "class_id": class_id,
-            "learner_count": 0,
-            "concept_averages": {},
-            "learners": []
+            "generated_at": datetime.utcnow().isoformat(),
+            "class_averages": {},
+            "learner_metrics": {}
         }
         
     # Get all mastery and progress events for learners in this class
@@ -101,14 +102,14 @@ def get_class_analytics(class_id: str, db: Session = Depends(get_db), current_te
             if lid not in mastery_dict:
                 mastery_dict[lid] = {}
             if cid not in mastery_dict[lid] or event.server_sequence > mastery_dict[lid][cid]['seq']:
-                mastery_dict[lid][cid] = {'score': score, 'seq': event.server_sequence}
+                mastery_dict[lid][cid] = {'score': score, 'seq': event.server_sequence or 0}
         elif event.event_type == "PROGRESS_UPDATED":
             pid = event.payload.get("content_id")
             progress = event.payload.get("progress", 0.0)
             if lid not in progress_dict:
                 progress_dict[lid] = {}
             if pid not in progress_dict[lid] or event.server_sequence > progress_dict[lid][pid]['seq']:
-                progress_dict[lid][pid] = {'score': progress, 'seq': event.server_sequence}
+                progress_dict[lid][pid] = {'score': progress, 'seq': event.server_sequence or 0}
                 
     # Aggregate class-wide concept averages
     concept_totals = {}
@@ -122,37 +123,36 @@ def get_class_analytics(class_id: str, db: Session = Depends(get_db), current_te
             concept_counts[cid] += 1
             
     concept_averages = {
-        cid: (concept_totals[cid] / concept_counts[cid])
+        cid: float(concept_totals[cid] / concept_counts[cid])
         for cid in concept_totals
     }
     
-    # Build learner level details
-    learners_data = []
+    # Build learner level details matching LearnerMetricsDto
+    learner_metrics = {}
     for learner in db_class.learners:
         lid = learner.id
-        l_mastery = mastery_dict.get(lid, {})
+        l_mastery = {cid: float(d['score']) for cid, d in mastery_dict.get(lid, {}).items()}
         l_progress = progress_dict.get(lid, {})
         
-        # Calculate overall mastery and progress for the learner
-        avg_mastery = sum([d['score'] for d in l_mastery.values()]) / len(l_mastery) if l_mastery else 0.0
-        avg_progress = sum([d['score'] for d in l_progress.values()]) / len(l_progress) if l_progress else 0.0
+        avg_mastery = float(sum(l_mastery.values()) / len(l_mastery)) if l_mastery else 0.0
+        completed_lessons = len(l_progress)
         
-        # Needs attention logic: low mastery (< 50%) or specific weak concepts
-        weak_concepts = [cid for cid, d in l_mastery.items() if d['score'] < 0.5]
+        weak_concepts = [cid for cid, score in l_mastery.items() if score < 0.5]
         needs_attention = avg_mastery < 0.5 or len(weak_concepts) > 0
         
-        learners_data.append({
-            "learner_id": lid,
-            "learner_name": learner.name,
-            "progress": avg_progress,
-            "mastery": avg_mastery,
-            "weak_concepts": weak_concepts,
+        learner_metrics[lid] = {
+            "name": learner.name or f"Student {lid[:4]}",
+            "grade": learner.grade,
+            "mastery_levels": l_mastery,
+            "completed_lessons": completed_lessons,
+            "average_score": avg_mastery,
             "needs_attention": needs_attention
-        })
+        }
         
+    from datetime import datetime
     return {
         "class_id": class_id,
-        "learner_count": len(learner_ids),
-        "concept_averages": concept_averages,
-        "learners": learners_data
+        "generated_at": datetime.utcnow().isoformat(),
+        "class_averages": concept_averages,
+        "learner_metrics": learner_metrics
     }

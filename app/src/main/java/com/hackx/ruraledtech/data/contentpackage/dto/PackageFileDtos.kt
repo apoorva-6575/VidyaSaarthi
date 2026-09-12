@@ -21,6 +21,7 @@ data class ManifestDto(
     val checksum: String,
     @SerialName("created_at") val createdAt: String = "",
     val priority: String = "normal",
+    @SerialName("class_id") val classId: String? = null,
 )
 
 @Serializable
@@ -31,6 +32,7 @@ data class LessonFileDto(
     val title: String,
     @SerialName("order_index") val orderIndex: Int,
     val blocks: List<ContentBlockFileDto>,
+    @SerialName("class_id") val classId: String? = null,
 )
 
 @Serializable

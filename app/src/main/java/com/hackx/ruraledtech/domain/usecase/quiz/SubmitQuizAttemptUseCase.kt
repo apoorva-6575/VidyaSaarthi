@@ -18,6 +18,9 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import com.hackx.ruraledtech.data.engine.DefaultAnswerEvaluator
+import com.hackx.ruraledtech.data.local.dao.LessonDao
+import com.hackx.ruraledtech.data.local.dao.QuestionDao
+import com.hackx.ruraledtech.data.local.entities.QuestionEntity
 import com.hackx.ruraledtech.domain.engine.AnswerEvaluator
 import com.hackx.ruraledtech.p2p.mesh.LearningMesh
 import javax.inject.Inject
@@ -135,9 +138,30 @@ class SubmitQuizAttemptUseCase @Inject constructor(
 class GetQuestionsForLessonUseCase @Inject constructor(
     private val repository: QuizRepository,
     private val progressRepository: ProgressRepository,
+    private val lessonDao: LessonDao,
+    private val questionDao: QuestionDao,
 ) {
     suspend operator fun invoke(lessonId: String, learnerId: String): List<Question> {
-        val questions = repository.getQuestionsForLesson(lessonId)
+        var questions = repository.getQuestionsForLesson(lessonId)
+        if (questions.isEmpty()) {
+            val lesson = lessonDao.getById(lessonId)
+            if (lesson != null) {
+                val fallbackQ = QuestionEntity(
+                    questionId = "q_${lessonId}_auto",
+                    lessonId = lessonId,
+                    conceptId = lesson.conceptId,
+                    questionType = "single_choice",
+                    language = lesson.language,
+                    prompt = "What is the key topic covered in ${lesson.title}?",
+                    optionsJson = """[{"id":"a","text":"${lesson.title.replace("\"", "\\\"")}"},{"id":"b","text":"General Overview"}]""",
+                    correctOptionId = "a",
+                    difficulty = 0.3f,
+                    explanation = "This lesson covers ${lesson.title}."
+                )
+                questionDao.insertAll(listOf(fallbackQ))
+                questions = repository.getQuestionsForLesson(lessonId)
+            }
+        }
         val conceptId = questions.firstOrNull()?.conceptId ?: return questions
         val currentMastery = progressRepository.getMastery(learnerId, conceptId)?.score ?: 0f
         return questions.sortedBy { kotlin.math.abs(it.difficulty - currentMastery) }

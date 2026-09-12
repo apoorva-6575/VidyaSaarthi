@@ -10,6 +10,7 @@ interface P2PConnectionManager {
     fun startDiscovery()
     fun stopDiscovery()
     
+    fun requestConnection(endpointId: String, endpointName: String = "RuralEdTech-Node")
     fun acceptConnection(endpointId: String)
     fun rejectConnection(endpointId: String)
     fun disconnect(endpointId: String)

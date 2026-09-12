@@ -5,4 +5,13 @@
             <certificates src="system" />
         </trust-anchors>
     </base-config>
+    <!--
+      Dev-only: the hackathon backend is plain HTTP, reached at the dev machine's LAN IP
+      (see BACKEND_URL in app/build.gradle.kts) and at the emulator-only 10.0.2.2 alias.
+      Cleartext stays disabled for every other host.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.171.250.90</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
 </network-security-config>

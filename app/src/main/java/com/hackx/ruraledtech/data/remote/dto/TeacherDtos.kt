@@ -35,7 +35,7 @@ data class ClassGroupCreateDto(
 data class LearnerDto(
     val id: String,
     val name: String,
-    val grade: Int = 1,
+    val grade: String? = null,
     val preferred_language: String = "hi",
     val avatar_key: String = "default",
 )
@@ -46,6 +46,7 @@ data class ClassGroupDto(
     val name: String,
     val grade: String? = null,
     val subject: String? = null,
+    val teacher_id: String? = null,
     val created_at: String? = null,
     val learners: List<LearnerDto> = emptyList(),
 )
@@ -60,10 +61,12 @@ data class ClassAnalyticsDto(
 
 @Serializable
 data class LearnerMetricsDto(
-    val mastery_levels: Map<String, Float>,
-    val completed_lessons: Int,
-    val average_score: Float,
-    val needs_attention: Boolean,
+    val name: String = "",
+    val grade: String? = null,
+    val mastery_levels: Map<String, Float> = emptyMap(),
+    val completed_lessons: Int = 0,
+    val average_score: Float = 0f,
+    val needs_attention: Boolean = false,
 )
 
 @Serializable
@@ -79,4 +82,13 @@ data class LearnerCreateDto(
     val name: String,
     val grade: String? = null,
     val preferred_language: String = "en",
+)
+
+@Serializable
+data class JoinClassRequestDto(
+    val code: String,
+    val learner_id: String,
+    val name: String? = null,
+    val grade: String? = null,
+    val preferred_language: String? = "en",
 )

@@ -35,3 +35,10 @@ class ClassGroupResponse(ClassGroupBase):
 
     class Config:
         from_attributes = True
+
+class JoinClassRequest(BaseModel):
+    code: str
+    learner_id: str
+    name: Optional[str] = None
+    grade: Optional[str] = None
+    preferred_language: Optional[str] = "en"

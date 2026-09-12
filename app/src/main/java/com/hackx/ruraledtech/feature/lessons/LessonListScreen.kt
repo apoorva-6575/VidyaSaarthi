@@ -45,12 +45,20 @@ fun LessonListScreen(
                 items(s.data) { lesson ->
                     Card(modifier = Modifier.fillMaxWidth().clickable { onLessonClick(lesson.lessonId) }) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(20.dp),
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(lesson.title, style = MaterialTheme.typography.titleMedium)
-                            Icon(Icons.Filled.PlayCircle, contentDescription = "Open lesson")
+                            androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
+                                Text(lesson.title, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                Text(
+                                    "📖 Read Material & Take Quiz · Offline Ready",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                            Icon(Icons.Filled.PlayCircle, contentDescription = "Open lesson", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }

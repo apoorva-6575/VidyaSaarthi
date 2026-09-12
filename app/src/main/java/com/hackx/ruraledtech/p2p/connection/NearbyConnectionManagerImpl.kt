@@ -68,8 +68,9 @@ class NearbyConnectionManagerImpl @Inject constructor(
                     payload.asBytes()?.let { listener?.onBytesReceived(endpointId, it) }
                 }
                 Payload.Type.FILE -> {
-                    Log.d(TAG, "Incoming file payload detected: ${payload.id}")
+                    Log.d(TAG, "Incoming file payload detected: ${payload.id} from $endpointId")
                     incomingFilePayloads[payload.id] = payload
+                    listener?.onFilePayloadReceived(endpointId, payload.id)
                 }
             }
         }
@@ -84,7 +85,8 @@ class NearbyConnectionManagerImpl @Inject constructor(
                 }
                 PayloadTransferUpdate.Status.SUCCESS -> {
                     val payload = incomingFilePayloads.remove(update.payloadId)
-                    val file = payload?.asFile()?.asJavaFile() ?: java.io.File(context.cacheDir, "payload_${update.payloadId}.pkg")
+                    val file = payload?.asFile()?.asJavaFile()
+                        ?: java.io.File(context.cacheDir, "payload_${update.payloadId}.pkg")
                     if (file.exists()) {
                         listener?.onFileTransferComplete(endpointId, update.payloadId, file)
                     } else {
@@ -103,7 +105,10 @@ class NearbyConnectionManagerImpl @Inject constructor(
     // --- COMMAND IMPLEMENTATIONS ---
 
     override fun startAdvertising(deviceName: String) {
-        val options = AdvertisingOptions.Builder().setStrategy(strategy).build()
+        val options = AdvertisingOptions.Builder()
+            .setStrategy(strategy)
+            .setDisruptiveUpgrade(false)
+            .build()
         connectionsClient.startAdvertising(deviceName, serviceId, connectionLifecycleCallback, options)
             .addOnSuccessListener { Log.d(TAG, "Advertising started") }
             .addOnFailureListener { Log.e(TAG, "Advertising failed", it) }
@@ -122,6 +127,13 @@ class NearbyConnectionManagerImpl @Inject constructor(
 
     override fun stopDiscovery() {
         connectionsClient.stopDiscovery()
+    }
+
+    override fun requestConnection(endpointId: String, endpointName: String) {
+        Log.d(TAG, "Requesting connection to $endpointId ($endpointName)")
+        connectionsClient.requestConnection(endpointName, endpointId, connectionLifecycleCallback)
+            .addOnSuccessListener { Log.d(TAG, "Connection request sent to $endpointId") }
+            .addOnFailureListener { Log.e(TAG, "Failed to request connection to $endpointId", it) }
     }
 
     override fun acceptConnection(endpointId: String) {

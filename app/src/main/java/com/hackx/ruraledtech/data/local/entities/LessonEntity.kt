@@ -15,4 +15,7 @@ data class LessonEntity(
     val title: String,
     val orderIndex: Int,
     val blocksJson: String,
+    /** The class this lesson belongs to. Null = available to all learners (general content). */
+    val classId: String? = null,
 )
+

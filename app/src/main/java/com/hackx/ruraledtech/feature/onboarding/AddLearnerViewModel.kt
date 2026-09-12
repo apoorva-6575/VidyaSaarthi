@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.hackx.ruraledtech.domain.voice.TextToSpeechEngine
+
 data class AddLearnerFormState(
     val name: String = "",
     val grade: Int = 5,
@@ -34,6 +36,7 @@ class AddLearnerViewModel @Inject constructor(
     private val selectLearnerUseCase: SelectLearnerUseCase,
     private val preferencesManager: PreferencesManager,
     private val ensureTtsVoiceInstalledUseCase: EnsureTtsVoiceInstalledUseCase,
+    private val textToSpeechEngine: TextToSpeechEngine,
 ) : ViewModel() {
 
     private val _formState = MutableStateFlow(AddLearnerFormState())
@@ -57,6 +60,10 @@ class AddLearnerViewModel @Inject constructor(
     fun onLanguageChanged(language: SupportedLanguage) {
         _formState.value = _formState.value.copy(language = language)
         viewModelScope.launch { ensureTtsVoiceInstalledUseCase(language.tag) }
+    }
+
+    fun openTtsSettings() {
+        textToSpeechEngine.openTtsSettings()
     }
 
     fun submit(onCreated: () -> Unit) {

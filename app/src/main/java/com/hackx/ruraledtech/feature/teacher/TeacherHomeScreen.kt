@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
@@ -46,15 +46,22 @@ import com.hackx.ruraledtech.data.local.entities.ClassGroupEntity
  * Class creation and analytics require connectivity (accounts/classes only exist server
  * side); the class list itself does not.
  */
+import androidx.compose.runtime.LaunchedEffect
+
 @Composable
 fun TeacherHomeScreen(
     onSwitchToStudent: () -> Unit,
     onOpenClassAnalytics: (String) -> Unit,
+    onOpenContentLibrary: () -> Unit,
     onLoggedOut: () -> Unit,
     viewModel: TeacherHomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshData()
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -85,7 +92,7 @@ fun TeacherHomeScreen(
                         Icon(Icons.Filled.Refresh, contentDescription = "Sync Classes")
                     }
                     IconButton(onClick = { viewModel.logOut(onLoggedOut) }) {
-                        Icon(Icons.Filled.Logout, contentDescription = "Log out")
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log out")
                     }
                 }
             }
@@ -100,6 +107,35 @@ fun TeacherHomeScreen(
 
             uiState.dashboard?.let { dashboard ->
                 DashboardSummaryCard(dashboard, modifier = Modifier.padding(bottom = 12.dp))
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .clickable { onOpenContentLibrary() },
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Curriculum & Mesh Distribution",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "Manage offline packages & distribute to students via P2P mesh",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Icon(
+                        Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                    )
+                }
             }
 
             if (uiState.error != null) {
@@ -129,7 +165,12 @@ fun TeacherHomeScreen(
                 ) {
                     items(uiState.classes.size) { index ->
                         val classGroup = uiState.classes[index]
-                        ClassRow(classGroup, onClick = { onOpenClassAnalytics(classGroup.classId) })
+                        val learnerCount = uiState.learnerCounts[classGroup.classId] ?: 0
+                        ClassRow(
+                            classGroup = classGroup,
+                            learnerCount = learnerCount,
+                            onClick = { onOpenClassAnalytics(classGroup.classId) }
+                        )
                     }
                 }
             }
@@ -203,19 +244,35 @@ private fun formatCachedAt(timestampMillis: Long): String {
 }
 
 @Composable
-private fun ClassRow(classGroup: ClassGroupEntity, onClick: () -> Unit) {
+private fun ClassRow(classGroup: ClassGroupEntity, learnerCount: Int, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(classGroup.name, style = MaterialTheme.typography.titleMedium)
                 if (classGroup.grade != null || classGroup.subject != null) {
                     Text(
                         "${classGroup.grade ?: ""} ${classGroup.subject ?: ""}".trim(),
                         style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Code: ${classGroup.classId.take(6).uppercase()}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        if (learnerCount > 0) "• $learnerCount student${if (learnerCount > 1) "s" else ""}" else "• No students yet",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

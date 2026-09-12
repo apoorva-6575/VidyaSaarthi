@@ -18,4 +18,7 @@ interface TextToSpeechEngine {
      * actually complete the download.
      */
     fun requestLanguageInstall(languageTag: String)
+
+    /** Opens Google Text-to-Speech / System TTS settings directly. */
+    fun openTtsSettings()
 }

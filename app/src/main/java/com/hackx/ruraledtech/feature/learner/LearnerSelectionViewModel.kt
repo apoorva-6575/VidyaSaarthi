@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.hackx.ruraledtech.domain.voice.TextToSpeechEngine
+
 /**
  * Renders the shared-device learner picker (PS section 6/15). Selecting a learner here
  * updates [com.hackx.ruraledtech.core.session.CurrentLearnerManager], which is what keeps
@@ -23,6 +25,7 @@ import javax.inject.Inject
 class LearnerSelectionViewModel @Inject constructor(
     getLearnersUseCase: GetLearnersUseCase,
     private val selectLearnerUseCase: SelectLearnerUseCase,
+    private val textToSpeechEngine: TextToSpeechEngine,
 ) : ViewModel() {
 
     val learners: StateFlow<UiState<List<Learner>>> = getLearnersUseCase()
@@ -34,5 +37,26 @@ class LearnerSelectionViewModel @Inject constructor(
             selectLearnerUseCase(learnerId)
             onSelected()
         }
+    }
+
+    private val _isSpeaking = MutableStateFlow(false)
+    val isSpeaking: StateFlow<Boolean> = _isSpeaking
+
+    fun playAudioGuide(lang: String = "hi") {
+        viewModelScope.launch {
+            _isSpeaking.value = true
+            textToSpeechEngine.speak(com.hackx.ruraledtech.feature.common.UiStrings.learnerSelectionAudioGuide(lang), lang)
+        }
+    }
+
+    fun stopSpeech() {
+        _isSpeaking.value = false
+        viewModelScope.launch {
+            textToSpeechEngine.stop()
+        }
+    }
+
+    fun openTtsSettings() {
+        textToSpeechEngine.openTtsSettings()
     }
 }

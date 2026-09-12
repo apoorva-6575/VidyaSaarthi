@@ -48,8 +48,7 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
 
         composable(Routes.ROLE_SELECTION) {
             RoleSelectionScreen(
-                onRoleSelected = { role ->
-                    val destination = if (role == UserRole.TEACHER) Routes.TEACHER_LOGIN else Routes.LANGUAGE_SELECTION
+                onNavigate = { destination ->
                     navController.navigate(destination) { popUpTo(Routes.ROLE_SELECTION) { inclusive = true } }
                 },
             )
@@ -65,7 +64,8 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
             TeacherHomeScreen(
                 onSwitchToStudent = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
                 onOpenClassAnalytics = { classId -> navController.navigate(Routes.classAnalytics(classId)) },
-                onLoggedOut = { navController.navigate(Routes.TEACHER_LOGIN) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
+                onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
+                onLoggedOut = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
             )
         }
 
@@ -73,7 +73,10 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
             route = Routes.CLASS_ANALYTICS,
             arguments = listOf(navArgument(Routes.ARG_CLASS_ID) { type = NavType.StringType }),
         ) {
-            ClassAnalyticsScreen()
+            ClassAnalyticsScreen(
+                onBack = { navController.popBackStack() },
+                onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
+            )
         }
 
         composable(Routes.LANGUAGE_SELECTION) {
@@ -92,6 +95,7 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
             LearnerSelectionScreen(
                 onLearnerSelected = { navController.navigate(Routes.HOME) { popUpTo(Routes.LEARNER_SELECTION) { inclusive = true } } },
                 onAddLearner = { navController.navigate(Routes.ADD_LEARNER) },
+                onSwitchRole = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.LEARNER_SELECTION) { inclusive = true } } },
             )
         }
 
@@ -101,6 +105,9 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
                 onOpenSubject = { subject -> navController.navigate(Routes.lessonList(subject)) },
                 onOpenProgress = { navController.navigate(Routes.PROGRESS) },
                 onOpenProfile = { navController.navigate(Routes.PROFILE) },
+                onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
+                onAddLearner = { navController.navigate(Routes.ADD_LEARNER) },
+                onOpenLesson = { lessonId -> navController.navigate(Routes.lessonViewer(lessonId)) },
             )
         }
 
@@ -135,13 +142,16 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
         composable(Routes.PROFILE) {
             ProfileScreen(
                 onSwitchedProfile = { navController.navigate(Routes.LEARNER_SELECTION) { popUpTo(Routes.HOME) { inclusive = true } } },
+                onLogoutToRoleSelection = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.HOME) { inclusive = true } } },
                 onOpenAccessibility = { navController.navigate(Routes.ACCESSIBILITY_SETTINGS) },
                 onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
                 onOpenPassport = { navController.navigate(Routes.PASSPORT) },
             )
         }
 
-        composable(Routes.CONTENT_LIBRARY) { ContentLibraryScreen() }
+        composable(Routes.CONTENT_LIBRARY) {
+            ContentLibraryScreen(onBack = { navController.popBackStack() })
+        }
 
         composable(Routes.PASSPORT) { PassportScreen() }
 

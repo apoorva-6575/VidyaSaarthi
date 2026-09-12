@@ -12,6 +12,7 @@ interface ConnectionListener {
     
     // Payload Events
     fun onBytesReceived(endpointId: String, bytes: ByteArray)
+    fun onFilePayloadReceived(endpointId: String, payloadId: Long) {}
     fun onFileTransferProgress(endpointId: String, payloadId: Long, progressPercent: Int)
     fun onFileTransferComplete(endpointId: String, payloadId: Long, file: File)
     fun onFileTransferFailed(endpointId: String, payloadId: Long)

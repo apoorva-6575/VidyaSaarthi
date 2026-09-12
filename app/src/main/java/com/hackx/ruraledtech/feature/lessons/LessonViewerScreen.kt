@@ -34,14 +34,29 @@ import com.hackx.ruraledtech.feature.common.EmptyState
 import com.hackx.ruraledtech.feature.common.LoadingState
 import com.hackx.ruraledtech.feature.common.UiState
 
+import androidx.compose.runtime.DisposableEffect
+
+import androidx.compose.material.icons.filled.Stop
+import com.hackx.ruraledtech.feature.common.SupportedLanguage
+import com.hackx.ruraledtech.feature.common.UiStrings
+
 @Composable
 fun LessonViewerScreen(
     onTakeQuiz: () -> Unit,
     viewModel: LessonViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val speakingLang by viewModel.speakingState.collectAsState()
+    val learnerLang by viewModel.learnerLanguage.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.markStarted() }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopSpeech()
+            viewModel.audioManager.stop()
+        }
+    }
 
     Scaffold { padding ->
         when (val s = state) {
@@ -55,8 +70,14 @@ fun LessonViewerScreen(
             is UiState.Success -> when (val result = s.data) {
                 is ContentLookupResult.Available -> LessonContent(
                     lesson = result.lesson,
-                    onPlayAudio = { viewModel.audioManager.play(it) },
+                    lang = learnerLang,
+                    speakingLang = speakingLang,
+                    onPlayAudio = {
+                        viewModel.stopSpeech()
+                        viewModel.audioManager.play(it)
+                    },
                     onSpeak = { viewModel.speakText(it) },
+                    onStopSpeech = { viewModel.stopSpeech() },
                     onFinish = {
                         viewModel.markCompleted()
                         onTakeQuiz()
@@ -72,18 +93,41 @@ fun LessonViewerScreen(
 @Composable
 private fun LessonContent(
     lesson: com.hackx.ruraledtech.domain.model.Lesson,
+    lang: String,
+    speakingLang: String?,
     onPlayAudio: (String) -> Unit,
     onSpeak: (String) -> Unit,
+    onStopSpeech: () -> Unit,
     onFinish: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().padding(20.dp)) {
         Text(lesson.title, style = MaterialTheme.typography.headlineMedium)
+
+        if (speakingLang != null) {
+            val spokenName = SupportedLanguage.fromTag(speakingLang).nativeName
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🔊 Speaking in $spokenName...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    IconButton(onClick = onStopSpeech) {
+                        Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+
         LazyColumn(modifier = Modifier.weight(1f).padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             items(lesson.blocks) { block -> ContentBlockView(block, onPlayAudio, onSpeak) }
         }
         Button(onClick = onFinish, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Text("Take the quiz", style = MaterialTheme.typography.titleMedium)
+            Text(UiStrings.takeQuiz(lang), style = MaterialTheme.typography.titleMedium)
         }
     }
 }

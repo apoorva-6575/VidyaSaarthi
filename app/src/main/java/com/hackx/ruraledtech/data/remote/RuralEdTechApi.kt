@@ -80,6 +80,9 @@ interface RuralEdTechApi {
         @Path("learner_id") learnerId: String,
     ): Response<Unit>
 
+    @POST("api/v1/classes/join")
+    suspend fun joinClass(@Body request: com.hackx.ruraledtech.data.remote.dto.JoinClassRequestDto): Response<ClassGroupDto>
+
     @GET("api/v1/teacher/dashboard")
     suspend fun getTeacherDashboard(): Response<TeacherDashboardDto>
 

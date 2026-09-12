@@ -46,9 +46,16 @@ class QuizViewModel @Inject constructor(
     private val _state = MutableStateFlow<QuizScreenState>(QuizScreenState.Loading)
     val state: StateFlow<QuizScreenState> = _state
 
+    private var speechJob: kotlinx.coroutines.Job? = null
+    val speakingState = MutableStateFlow<String?>(null)
+    val learnerLanguage = MutableStateFlow("en")
+
     init {
         viewModelScope.launch {
             val learnerId = currentLearnerManager.currentLearnerId.value
+            if (learnerId != null) {
+                learnerRepository.getLearner(learnerId)?.let { learnerLanguage.value = it.preferredLanguage }
+            }
             val questions = if (learnerId != null) {
                 getQuestionsForLessonUseCase(lessonId, learnerId)
             } else {
@@ -69,11 +76,33 @@ class QuizViewModel @Inject constructor(
 
     /** "Read question" for low-literacy support (PS section 25/26) — offline TTS in the learner's own language. */
     fun readQuestionAloud(question: Question) {
-        viewModelScope.launch {
-            val learnerId = currentLearnerManager.currentLearnerId.value ?: return@launch
-            val languageTag = learnerRepository.getLearner(learnerId)?.preferredLanguage ?: question.language
-            val optionsText = question.options.joinToString(". ") { it.text }
-            textToSpeechEngine.speak("${question.prompt}. Options: $optionsText", languageTag)
+        speechJob?.cancel()
+        speechJob = viewModelScope.launch {
+            textToSpeechEngine.stop()
+            val learnerId = currentLearnerManager.currentLearnerId.value
+            val languageTag = if (learnerId != null) {
+                learnerRepository.getLearner(learnerId)?.preferredLanguage ?: question.language
+            } else question.language
+            speakingState.value = languageTag
+            val optionsText = question.options.mapIndexed { idx, opt -> "Option ${idx + 1}: ${opt.text}" }.joinToString(". ")
+            textToSpeechEngine.speak("${question.prompt}. $optionsText", languageTag)
+        }
+    }
+
+    fun stopSpeech() {
+        speechJob?.cancel()
+        speechJob = null
+        speakingState.value = null
+        viewModelScope.launch { textToSpeechEngine.stop() }
+    }
+
+    fun playAudioGuide() {
+        speechJob?.cancel()
+        speechJob = viewModelScope.launch {
+            textToSpeechEngine.stop()
+            val lang = learnerLanguage.value
+            speakingState.value = lang
+            textToSpeechEngine.speak(com.hackx.ruraledtech.feature.common.UiStrings.quizAudioGuide(lang), lang)
         }
     }
 
@@ -83,7 +112,10 @@ class QuizViewModel @Inject constructor(
         val learnerId = currentLearnerManager.currentLearnerId.value ?: return
         val question = current.questions[current.currentIndex]
 
+        speechJob?.cancel()
+        speechJob = null
         viewModelScope.launch {
+            textToSpeechEngine.stop()
             _state.value = QuizScreenState.Submitting
             val outcome = submitQuizAttemptUseCase(
                 learnerId = learnerId,
@@ -91,6 +123,16 @@ class QuizViewModel @Inject constructor(
                 selectedOptionIds = listOf(selectedOptionId),
                 responseTimeMs = System.currentTimeMillis() - current.questionStartedAtMs,
             )
+            
+            // Low-literacy immediate spoken feedback in regional language
+            val lang = learnerLanguage.value
+            val feedbackText = if (outcome.correct) {
+                com.hackx.ruraledtech.feature.common.UiStrings.correctAnswerPraise(lang)
+            } else {
+                com.hackx.ruraledtech.feature.common.UiStrings.tryAgainPrompt(lang)
+            }
+            textToSpeechEngine.speak(feedbackText, lang)
+
             val newOutcomes = current.outcomes + outcome
             val nextIndex = current.currentIndex + 1
             _state.value = if (nextIndex >= current.questions.size) {
@@ -106,6 +148,8 @@ class QuizViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        speechJob?.cancel()
+        speechJob = null
         kotlinx.coroutines.runBlocking { textToSpeechEngine.stop() }
     }
 }
