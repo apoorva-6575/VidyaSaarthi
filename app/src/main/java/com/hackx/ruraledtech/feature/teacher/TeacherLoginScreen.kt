@@ -90,6 +90,14 @@ fun TeacherLoginScreen(
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
+
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { viewModel.loginOffline(onLoginSuccess) },
+                    enabled = !state.submitting,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                ) {
+                    Text("⚡ Continue Offline (Local Mode)")
+                }
             }
         }
     }
