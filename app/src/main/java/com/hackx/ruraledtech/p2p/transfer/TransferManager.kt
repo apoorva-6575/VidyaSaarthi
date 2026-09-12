@@ -141,10 +141,8 @@ class TransferManager(
         val zipFile = packageStorageManager?.getPackageZipFile(transfer.packageId)
 
         val payloadId = if (zipFile != null && zipFile.exists() && zipFile.length() > 0) {
-            Log.d(TAG, "[P2P][FILE_SEND_START] Outbound transfer $transferId using File ${zipFile.absolutePath} (${zipFile.length()} bytes)")
             connectionManager.sendFile(transfer.endpointId, zipFile)
         } else if (transfer.fileUri != null) {
-            Log.d(TAG, "[P2P][FILE_SEND_START] Outbound transfer $transferId using Uri ${transfer.fileUri}")
             connectionManager.sendFile(transfer.endpointId, transfer.fileUri)
         } else {
             Log.e(TAG, "[P2P][FILE_SEND_ERROR] Cannot start outbound transfer $transferId: no valid file or URI found for package ${transfer.packageId}")
@@ -152,6 +150,11 @@ class TransferManager(
         }
 
         associatePayloadId(transfer.endpointId, payloadId, transferId)
+        Log.d(
+            TAG,
+            "[P2P][FILE_SEND_START] transferId=$transferId payloadId=$payloadId file=${zipFile?.absolutePath ?: transfer.fileUri} size=${zipFile?.length() ?: 0}"
+        )
+
         _transfersMap.value = _transfersMap.value + (transferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
             transferId = transferId,
             packageId = transfer.packageId,
@@ -222,9 +225,9 @@ class TransferManager(
 
         coroutineScope.launch {
             val calculatedSha256 = packageStorageManager?.computeSha256(tempFile) ?: ""
-            Log.d(TAG, "[P2P][FILE_RECEIVED] payloadId=$payloadId from $endpointId tempFile=${tempFile.absolutePath} size=${tempFile.length()} bytes")
-            Log.d(TAG, "[P2P][SHA256_EXPECTED] hash=${finalTransfer.expectedHash}")
-            Log.d(TAG, "[P2P][SHA256_ACTUAL] hash=$calculatedSha256")
+            Log.d(TAG, "[P2P][FILE_RECEIVED] payloadId=$payloadId size=${tempFile.length()}")
+            Log.d(TAG, "[P2P][SHA256_EXPECTED] ${finalTransfer.expectedHash}")
+            Log.d(TAG, "[P2P][SHA256_ACTUAL] $calculatedSha256")
 
             val isValid = PackageVerifier.verifyFile(tempFile, finalTransfer.expectedHash, ioDispatcher)
 

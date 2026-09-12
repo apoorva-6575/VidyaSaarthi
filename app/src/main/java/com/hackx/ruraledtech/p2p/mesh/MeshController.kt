@@ -58,14 +58,15 @@ class MeshController(
     val availablePeerPackagesFlow: StateFlow<List<PackageDescriptor>> = _availablePeerPackagesFlow.asStateFlow()
 
     init {
-        syncManifestFromDatabase()
+        coroutineScope.launch {
+            syncManifestFromDatabase()
+        }
 
         transferManager?.onPackageInstalled = { packageId, version ->
-            // A package installed via P2P transfer already got a REAL checksum from
-            // TransferManager.onFileTransferComplete's onSuccess callback (fired just before
-            // this one, same install) — don't clobber it. This only needs to fill in a
-            // descriptor for packages installed some other way (backend download, demo seed)
-            // that never went through that verified-transfer path.
+            _availablePeerPackagesFlow.value = _availablePeerPackagesFlow.value.filterNot {
+                it.packageId == packageId
+            }
+
             val alreadyDescribed = localManifest.packages.any { it.packageId == packageId && it.version == version }
             if (alreadyDescribed) {
                 Log.d(TAG, "Package $packageId v$version already has a manifest entry from its verified transfer; not overwriting.")
@@ -92,32 +93,30 @@ class MeshController(
         }
     }
 
-    fun syncManifestFromDatabase() {
-        coroutineScope.launch {
-            try {
-                val installed = contentPackageDao?.getInstalled() ?: emptyList()
-                val descriptors = installed.map { entity ->
-                    val zipFile = packageStorageManager?.getPackageZipFile(entity.packageId)
-                    val checksum = if (zipFile != null && zipFile.exists()) {
-                        packageStorageManager?.computeSha256(zipFile) ?: entity.checksum
-                    } else {
-                        entity.checksum
-                    }
-                    val size = zipFile?.length() ?: entity.sizeBytes
-                    PackageDescriptor(
-                        packageId = entity.packageId,
-                        version = entity.version,
-                        checksum = checksum,
-                        sizeBytes = size
-                    )
+    suspend fun syncManifestFromDatabase() {
+        try {
+            val installed = contentPackageDao?.getInstalled() ?: emptyList()
+            val descriptors = installed.map { entity ->
+                val zipFile = packageStorageManager?.getPackageZipFile(entity.packageId)
+                val checksum = if (zipFile != null && zipFile.exists()) {
+                    packageStorageManager?.computeSha256(zipFile) ?: entity.checksum
+                } else {
+                    entity.checksum
                 }
-                localManifest = localManifest.copy(
-                    packages = descriptors
+                val size = zipFile?.length() ?: entity.sizeBytes
+                PackageDescriptor(
+                    packageId = entity.packageId,
+                    version = entity.version,
+                    checksum = checksum,
+                    sizeBytes = size
                 )
-                Log.d(TAG, "Synced local manifest with ${descriptors.size} packages from Room DB for Mesh.")
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to sync local manifest from DB", e)
             }
+            localManifest = localManifest.copy(
+                packages = descriptors
+            )
+            Log.d(TAG, "Synced local manifest with ${descriptors.size} packages.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to sync local manifest from DB", e)
         }
     }
 
@@ -389,84 +388,79 @@ class MeshController(
         Log.d(TAG, "Reconciling remote manifest from ${remoteManifest.deviceId}")
         val result = reconciler.reconcile(localManifest, remoteManifest)
         _availablePeerPackagesFlow.value = result.toRequest
-
-        result.toRequest.forEach { pkg ->
-            Log.d(TAG, "Sending REQUEST for ${pkg.packageId} v${pkg.version} to $endpointId")
-            val req = P2PMessage.Request(
-                messageId = UUID.randomUUID().toString(),
-                senderDeviceId = deviceId,
-                timestamp = System.currentTimeMillis(),
-                packageId = pkg.packageId,
-                version = pkg.version
-            )
-            connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(req))
-        }
-
-        result.toOffer.forEach { pkg ->
-            val zipFile = packageStorageManager?.getPackageZipFile(pkg.packageId)
-            if (zipFile != null && zipFile.exists()) {
-                val transferId = UUID.randomUUID().toString()
-                transferManager?.registerOutboundTransfer(
-                    transferId = transferId,
-                    packageId = pkg.packageId,
-                    version = pkg.version,
-                    expectedHash = pkg.checksum,
-                    sizeBytes = pkg.sizeBytes,
-                    fileUri = Uri.fromFile(zipFile),
-                    endpointId = endpointId
-                )
-
-                Log.d(TAG, "Sending OFFER for ${pkg.packageId} v${pkg.version} (transferId: $transferId) to $endpointId")
-                val offer = P2PMessage.Offer(
-                    messageId = UUID.randomUUID().toString(),
-                    senderDeviceId = deviceId,
-                    timestamp = System.currentTimeMillis(),
-                    packageId = pkg.packageId,
-                    version = pkg.version,
-                    expectedHash = pkg.checksum,
-                    transferId = transferId,
-                    sizeBytes = pkg.sizeBytes
-                )
-                connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(offer))
-            }
-        }
     }
 
     private fun handleIncomingRequest(endpointId: String, request: P2PMessage.Request) {
-        Log.d(TAG, "Peer $endpointId requested ${request.packageId} v${request.version}")
+        coroutineScope.launch {
+            Log.d(
+                TAG,
+                "[P2P][REQUEST] Peer $endpointId requested packageId=${request.packageId} version=${request.version}"
+            )
 
-        val pkgDescriptor = localManifest.packages.firstOrNull { it.packageId == request.packageId }
-        val zipFile = packageStorageManager?.getPackageZipFile(request.packageId)
+            val zipFile =
+                packageStorageManager?.getPackageZipFile(
+                    request.packageId
+                )
 
-        if (zipFile != null && zipFile.exists()) {
-            val checksum = pkgDescriptor?.checksum ?: ""
-            val sizeBytes = pkgDescriptor?.sizeBytes ?: zipFile.length()
+            if (zipFile == null || !zipFile.exists()) {
+                Log.w(
+                    TAG,
+                    "[P2P][REQUEST] Package ZIP not found: ${request.packageId}"
+                )
+                return@launch
+            }
+
+            val actualZipChecksum =
+                packageStorageManager?.computeSha256(zipFile)
+
+            if (actualZipChecksum.isNullOrBlank()) {
+                Log.e(
+                    TAG,
+                    "[P2P][REQUEST] Could not calculate ZIP SHA-256 for ${request.packageId}"
+                )
+                return@launch
+            }
+
+            val pkgDescriptor =
+                localManifest.packages.firstOrNull {
+                    it.packageId == request.packageId
+                }
+
+            val actualVersion =
+                pkgDescriptor?.version ?: 1
+
+            val actualSize =
+                zipFile.length()
+
             val transferId = UUID.randomUUID().toString()
 
             transferManager?.registerOutboundTransfer(
                 transferId = transferId,
                 packageId = request.packageId,
-                version = request.version,
-                expectedHash = checksum,
-                sizeBytes = sizeBytes,
+                version = actualVersion,
+                expectedHash = actualZipChecksum,
+                sizeBytes = actualSize,
                 fileUri = Uri.fromFile(zipFile),
                 endpointId = endpointId
             )
 
-            Log.d(TAG, "Sending OFFER for requested ${request.packageId} (transferId: $transferId) to $endpointId")
+            Log.d(
+                TAG,
+                "[P2P][OFFER] packageId=${request.packageId} version=$actualVersion transferId=$transferId zipPath=${zipFile.absolutePath} zipSize=$actualSize zipSha256=$actualZipChecksum"
+            )
+
             val offer = P2PMessage.Offer(
                 messageId = UUID.randomUUID().toString(),
                 senderDeviceId = deviceId,
                 timestamp = System.currentTimeMillis(),
                 packageId = request.packageId,
-                version = request.version,
-                expectedHash = checksum,
+                version = actualVersion,
+                expectedHash = actualZipChecksum,
                 transferId = transferId,
-                sizeBytes = sizeBytes
+                sizeBytes = actualSize
             )
+
             connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(offer))
-        } else {
-            Log.w(TAG, "Cannot fulfill REQUEST for ${request.packageId}: package ZIP not found locally")
         }
     }
 
@@ -486,7 +480,10 @@ class MeshController(
                 endpointId = endpointId
             )
 
-            Log.d(TAG, "Accepting OFFER for ${offer.packageId} (transferId: ${offer.transferId}). Sending ACCEPT.")
+            Log.d(
+                TAG,
+                "[P2P][ACCEPT] transferId=${offer.transferId} packageId=${offer.packageId}"
+            )
             val acceptMsg = P2PMessage.Accept(
                 messageId = UUID.randomUUID().toString(),
                 senderDeviceId = deviceId,
@@ -513,56 +510,76 @@ class MeshController(
         coroutineScope.launch {
             syncManifestFromDatabase()
             val zipFile = packageStorageManager?.getPackageZipFile(packageId)
-            val checksum = if (zipFile != null && zipFile.exists()) {
-                packageStorageManager?.computeSha256(zipFile) ?: ""
-            } else ""
-            val size = zipFile?.length() ?: 4096L
+            if (zipFile == null || !zipFile.exists()) {
+                Log.w(TAG, "[P2P][BROADCAST] Cannot broadcast package $packageId: ZIP file not found")
+                return@launch
+            }
 
-            val descriptor = localManifest.packages.firstOrNull { it.packageId == packageId }
-                ?: PackageDescriptor(packageId, 1, checksum, size)
+            val zipChecksum = packageStorageManager?.computeSha256(zipFile)
+                ?: return@launch
+
+            val existing = localManifest.packages.firstOrNull {
+                it.packageId == packageId
+            }
+
+            val descriptor = PackageDescriptor(
+                packageId = packageId,
+                version = existing?.version ?: 1,
+                checksum = zipChecksum,
+                sizeBytes = zipFile.length()
+            )
 
             val updated = (localManifest.packages.filterNot { it.packageId == packageId } + descriptor)
             localManifest = localManifest.copy(packages = updated)
             broadcastLocalManifest()
 
-            if (zipFile != null && zipFile.exists()) {
-                connectedEndpoints.forEach { endpointId ->
-                    val transferId = UUID.randomUUID().toString()
-                    transferManager?.registerOutboundTransfer(
-                        transferId = transferId,
-                        packageId = packageId,
-                        version = descriptor.version,
-                        expectedHash = descriptor.checksum,
-                        sizeBytes = size,
-                        fileUri = Uri.fromFile(zipFile),
-                        endpointId = endpointId
-                    )
-                    val offer = P2PMessage.Offer(
-                        messageId = UUID.randomUUID().toString(),
-                        senderDeviceId = deviceId,
-                        timestamp = System.currentTimeMillis(),
-                        packageId = packageId,
-                        version = descriptor.version,
-                        expectedHash = descriptor.checksum,
-                        transferId = transferId,
-                        sizeBytes = size
-                    )
-                    connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(offer))
-                }
+            connectedEndpoints.forEach { endpointId ->
+                val transferId = UUID.randomUUID().toString()
+                transferManager?.registerOutboundTransfer(
+                    transferId = transferId,
+                    packageId = packageId,
+                    version = descriptor.version,
+                    expectedHash = zipChecksum,
+                    sizeBytes = zipFile.length(),
+                    fileUri = Uri.fromFile(zipFile),
+                    endpointId = endpointId
+                )
+
+                Log.d(
+                    TAG,
+                    "[P2P][OFFER] packageId=$packageId version=${descriptor.version} transferId=$transferId zipPath=${zipFile.absolutePath} zipSize=${zipFile.length()} zipSha256=$zipChecksum"
+                )
+
+                val offer = P2PMessage.Offer(
+                    messageId = UUID.randomUUID().toString(),
+                    senderDeviceId = deviceId,
+                    timestamp = System.currentTimeMillis(),
+                    packageId = packageId,
+                    version = descriptor.version,
+                    expectedHash = zipChecksum,
+                    transferId = transferId,
+                    sizeBytes = zipFile.length()
+                )
+                connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(offer))
             }
         }
     }
 
-    fun broadcastRequest(packageId: String, version: Int) {
+    fun broadcastRequest(packageId: String, version: Int = 1) {
+        val reqVersion = if (version <= 0) 1 else version
+        Log.d(
+            TAG,
+            "[P2P][REQUEST] packageId=$packageId version=$reqVersion endpoint=${connectedEndpoints.joinToString()}"
+        )
         val req = P2PMessage.Request(
             messageId = UUID.randomUUID().toString(),
             senderDeviceId = deviceId,
             timestamp = System.currentTimeMillis(),
             packageId = packageId,
-            version = version
+            version = reqVersion
         )
         val payload = ProtocolSerializer.serialize(req)
-        Log.d(TAG, "Broadcasting REQUEST for $packageId v$version to ${connectedEndpoints.size} peers.")
+        Log.d(TAG, "Broadcasting REQUEST for $packageId v$reqVersion to ${connectedEndpoints.size} peers.")
         connectedEndpoints.forEach { connectionManager.sendBytes(it, payload) }
     }
 

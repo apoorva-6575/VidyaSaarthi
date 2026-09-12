@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 class LearningMeshImpl @Inject constructor(
@@ -36,7 +39,9 @@ class LearningMeshImpl @Inject constructor(
                 "localEndpoint=${connectionManager.getLocalEndpointName()}"
         )
 
-        meshController.syncManifestFromDatabase()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            meshController.syncManifestFromDatabase()
+        }
 
         _isMeshActive.value = true
 
@@ -58,8 +63,8 @@ class LearningMeshImpl @Inject constructor(
     }
 
     override suspend fun requestContent(requirement: ContentRequirement): Boolean {
-        Log.d(TAG, "Requested content: ${requirement.packageId}. Searching mesh...")
-        meshController.broadcastRequest(requirement.packageId, 0)
+        Log.d(TAG, "[P2P][REQUEST] Requested content: ${requirement.packageId}. Searching mesh...")
+        meshController.broadcastRequest(requirement.packageId, 1)
         return true
     }
 
