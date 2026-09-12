@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=for-the-badge)](LICENSE)
 
 ---
-*Developed for Smart India Hackathon / MUJ HACKX 4.0 — PS #4: Accessible Education for Rural India (EdTech)*
+*Developed for MUJ HACKX 4.0 — PS #4: Accessible Education for Rural India (EdTech)*
 
 </div>
 
