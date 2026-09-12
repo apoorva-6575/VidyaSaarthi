@@ -22,6 +22,10 @@ class LearningMeshImpl @Inject constructor(
     private val _isMeshActive = MutableStateFlow(false)
 
     override fun startMesh() {
+        if (_isMeshActive.value) {
+            Log.d(TAG, "Mesh already active; ignoring duplicate startMesh call.")
+            return
+        }
         Log.d(TAG, "Starting Learning Mesh... Advertising & Discovering.")
         _isMeshActive.value = true
         meshController.syncManifestFromDatabase()
@@ -30,6 +34,10 @@ class LearningMeshImpl @Inject constructor(
     }
 
     override fun stopMesh() {
+        if (!_isMeshActive.value) {
+            Log.d(TAG, "Mesh already inactive; ignoring duplicate stopMesh call.")
+            return
+        }
         Log.d(TAG, "Stopping Learning Mesh.")
         _isMeshActive.value = false
         connectionManager.stopAdvertising()

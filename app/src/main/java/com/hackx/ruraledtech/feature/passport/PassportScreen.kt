@@ -30,8 +30,23 @@ import com.hackx.ruraledtech.p2p.passport.transport.PassportImportResult
 @Composable
 fun PassportScreen(viewModel: PassportViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-    LaunchedEffect(Unit) { viewModel.startMesh() }
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        if (com.hackx.ruraledtech.core.permissions.P2PPermissions.hasAllPermissions(context)) {
+            viewModel.startMesh()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (com.hackx.ruraledtech.core.permissions.P2PPermissions.hasAllPermissions(context)) {
+            viewModel.startMesh()
+        } else {
+            permissionLauncher.launch(com.hackx.ruraledtech.core.permissions.P2PPermissions.required)
+        }
+    }
 
     Scaffold { padding ->
         Column(

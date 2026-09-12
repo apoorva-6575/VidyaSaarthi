@@ -42,20 +42,32 @@ class NearbyConnectionManagerImpl @Inject constructor(
     // 2. CONNECTION LIFECYCLE CALLBACKS
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            Log.d(TAG, "Connection initiated with: $endpointId. Auth token: ${info.authenticationToken}")
+            Log.d(TAG, "[P2P][INITIATED] Connection initiated with endpoint=$endpointId name=${info.endpointName} token=${info.authenticationToken}")
             listener?.onConnectionInitiated(endpointId, info.endpointName, info.authenticationToken)
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            when (result.status.statusCode) {
-                ConnectionsStatusCodes.STATUS_OK -> listener?.onConnectionAccepted(endpointId)
-                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> listener?.onConnectionRejected(endpointId)
-                else -> listener?.onDisconnected(endpointId)
+            val statusCode = result.status.statusCode
+            val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+            Log.d(TAG, "[P2P] Connection result for endpoint=$endpointId statusCode=$statusCode status=$statusStr")
+            when (statusCode) {
+                ConnectionsStatusCodes.STATUS_OK -> {
+                    Log.d(TAG, "[P2P][CONNECTED] endpoint=$endpointId status=STATUS_OK")
+                    listener?.onConnectionAccepted(endpointId)
+                }
+                ConnectionsStatusCodes.STATUS_CONNECTION_REJECTED -> {
+                    Log.w(TAG, "[P2P][CONNECTION_REJECTED] endpoint=$endpointId status=STATUS_CONNECTION_REJECTED")
+                    listener?.onConnectionRejected(endpointId)
+                }
+                else -> {
+                    Log.e(TAG, "[P2P][CONNECTION_FAILED] endpoint=$endpointId statusCode=$statusCode status=$statusStr")
+                    listener?.onDisconnected(endpointId)
+                }
             }
         }
 
         override fun onDisconnected(endpointId: String) {
-            Log.d(TAG, "Disconnected from: $endpointId")
+            Log.d(TAG, "[P2P][DISCONNECTED] Disconnected from endpoint=$endpointId")
             listener?.onDisconnected(endpointId)
         }
     }
@@ -65,10 +77,13 @@ class NearbyConnectionManagerImpl @Inject constructor(
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
             when (payload.type) {
                 Payload.Type.BYTES -> {
-                    payload.asBytes()?.let { listener?.onBytesReceived(endpointId, it) }
+                    payload.asBytes()?.let {
+                        Log.d(TAG, "[P2P][BYTES_RECEIVED] from endpoint=$endpointId size=${it.size} bytes")
+                        listener?.onBytesReceived(endpointId, it)
+                    }
                 }
                 Payload.Type.FILE -> {
-                    Log.d(TAG, "Incoming file payload detected: ${payload.id} from $endpointId")
+                    Log.d(TAG, "[P2P][FILE_RECEIVED] Incoming file payload detected: payloadId=${payload.id} from endpoint=$endpointId")
                     incomingFilePayloads[payload.id] = payload
                     listener?.onFilePayloadReceived(endpointId, payload.id)
                 }
@@ -85,16 +100,41 @@ class NearbyConnectionManagerImpl @Inject constructor(
                 }
                 PayloadTransferUpdate.Status.SUCCESS -> {
                     val payload = incomingFilePayloads.remove(update.payloadId)
-                    val file = payload?.asFile()?.asJavaFile()
-                        ?: java.io.File(context.cacheDir, "payload_${update.payloadId}.pkg")
-                    if (file.exists()) {
-                        listener?.onFileTransferComplete(endpointId, update.payloadId, file)
+                    Log.d(TAG, "[P2P][FILE_RECEIVE_SUCCESS] Payload ${update.payloadId} transfer completed from $endpointId. Processing file...")
+                    val destinationFile = try {
+                        val javaFile = payload?.asFile()?.asJavaFile()
+                        if (javaFile != null && javaFile.exists() && javaFile.length() > 0) {
+                            javaFile
+                        } else {
+                            val payloadUri = payload?.asFile()?.asUri()
+                            if (payloadUri != null) {
+                                val incomingDir = java.io.File(context.cacheDir, "incoming").apply { if (!exists()) mkdirs() }
+                                val tempFile = java.io.File(incomingDir, "payload_${update.payloadId}.zip")
+                                context.contentResolver.openInputStream(payloadUri)?.use { input ->
+                                    java.io.FileOutputStream(tempFile).use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                tempFile
+                            } else {
+                                null
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[P2P][FILE_RECEIVE_ERROR] Exception processing received payload file ${update.payloadId}", e)
+                        null
+                    }
+
+                    if (destinationFile != null && destinationFile.exists() && destinationFile.length() > 0) {
+                        Log.d(TAG, "[P2P][FILE_TRANSFER_COMPLETE] payloadId=${update.payloadId} file=${destinationFile.absolutePath} size=${destinationFile.length()} bytes")
+                        listener?.onFileTransferComplete(endpointId, update.payloadId, destinationFile)
                     } else {
-                        Log.e(TAG, "Transfer success but file payload missing or invalid: ${update.payloadId}")
+                        Log.e(TAG, "[P2P][FILE_TRANSFER_FAILED] Payload ${update.payloadId} completed but file is invalid or zero-length")
                         listener?.onFileTransferFailed(endpointId, update.payloadId)
                     }
                 }
                 PayloadTransferUpdate.Status.FAILURE, PayloadTransferUpdate.Status.CANCELED -> {
+                    Log.e(TAG, "[P2P][FILE_TRANSFER_FAILED] Payload ${update.payloadId} status=${update.status}")
                     incomingFilePayloads.remove(update.payloadId)
                     listener?.onFileTransferFailed(endpointId, update.payloadId)
                 }
@@ -109,66 +149,128 @@ class NearbyConnectionManagerImpl @Inject constructor(
             .setStrategy(strategy)
             .setDisruptiveUpgrade(false)
             .build()
+        Log.d(TAG, "[P2P][ADVERTISE] Starting advertising name=$deviceName serviceId=$serviceId strategy=P2P_CLUSTER")
         connectionsClient.startAdvertising(deviceName, serviceId, connectionLifecycleCallback, options)
-            .addOnSuccessListener { Log.d(TAG, "Advertising started: $deviceName") }
+            .addOnSuccessListener { Log.d(TAG, "[P2P][ADVERTISE] Advertising started successfully: $deviceName") }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Advertising failed: ${e.message}", e)
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.e(TAG, "[P2P][ADVERTISE][FAILED] statusCode=$statusCode status=$statusStr error=${e.message}", e)
             }
     }
 
     override fun stopAdvertising() {
         try {
+            Log.d(TAG, "[P2P][ADVERTISE] Stopping advertising")
             connectionsClient.stopAdvertising()
         } catch (e: Exception) {
-            Log.w(TAG, "stopAdvertising warning", e)
+            Log.w(TAG, "[P2P][ADVERTISE] stopAdvertising warning", e)
         }
     }
 
     override fun startDiscovery() {
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
+        Log.d(TAG, "[P2P][DISCOVERY] Starting discovery serviceId=$serviceId strategy=P2P_CLUSTER")
         connectionsClient.startDiscovery(serviceId, endpointDiscoveryCallback, options)
-            .addOnSuccessListener { Log.d(TAG, "Discovery started for $serviceId") }
+            .addOnSuccessListener { Log.d(TAG, "[P2P][DISCOVERY] Discovery started successfully for $serviceId") }
             .addOnFailureListener { e ->
-                Log.e(TAG, "Discovery failed: ${e.message}", e)
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.e(TAG, "[P2P][DISCOVERY][FAILED] statusCode=$statusCode status=$statusStr error=${e.message}", e)
             }
     }
 
     override fun stopDiscovery() {
         try {
+            Log.d(TAG, "[P2P][DISCOVERY] Stopping discovery")
             connectionsClient.stopDiscovery()
         } catch (e: Exception) {
-            Log.w(TAG, "stopDiscovery warning", e)
+            Log.w(TAG, "[P2P][DISCOVERY] stopDiscovery warning", e)
         }
     }
 
     override fun requestConnection(endpointId: String, endpointName: String) {
-        Log.d(TAG, "Requesting connection to $endpointId ($endpointName)")
-        connectionsClient.requestConnection(endpointName, endpointId, connectionLifecycleCallback)
-            .addOnSuccessListener { Log.d(TAG, "Connection request sent to $endpointId") }
+        val localDeviceName = "RuralEdTech-Node"
+        Log.d(TAG, "[P2P][REQUEST] Requesting connection to remote endpoint=$endpointId (remoteName=$endpointName) using localName=$localDeviceName")
+        connectionsClient.requestConnection(localDeviceName, endpointId, connectionLifecycleCallback)
+            .addOnSuccessListener { Log.d(TAG, "[P2P][REQUEST] Connection request successfully sent to $endpointId") }
             .addOnFailureListener { e ->
-                Log.w(TAG, "Connection request to $endpointId completed/ignored: ${e.message}")
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.w(TAG, "[P2P][REQUEST_FAILED] Connection request to $endpointId failed: statusCode=$statusCode status=$statusStr error=${e.message}")
             }
     }
 
     override fun acceptConnection(endpointId: String) {
+        Log.d(TAG, "[P2P][ACCEPT] Accepting connection from endpoint=$endpointId")
         connectionsClient.acceptConnection(endpointId, payloadCallback)
+            .addOnSuccessListener { Log.d(TAG, "[P2P][ACCEPT] Connection accepted for endpoint=$endpointId") }
+            .addOnFailureListener { e ->
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.e(TAG, "[P2P][ACCEPT_FAILED] Failed to accept connection from $endpointId: statusCode=$statusCode status=$statusStr", e)
+            }
     }
 
     override fun rejectConnection(endpointId: String) {
+        Log.d(TAG, "[P2P][REJECT] Rejecting connection from endpoint=$endpointId")
         connectionsClient.rejectConnection(endpointId)
     }
 
     override fun disconnect(endpointId: String) {
+        Log.d(TAG, "[P2P][DISCONNECT] Disconnecting from endpoint=$endpointId")
         connectionsClient.disconnectFromEndpoint(endpointId)
     }
 
     override fun sendBytes(endpointId: String, bytes: ByteArray) {
+        Log.d(TAG, "[P2P][BYTES_SEND] Sending ${bytes.size} bytes to endpoint=$endpointId")
         connectionsClient.sendPayload(endpointId, Payload.fromBytes(bytes))
+            .addOnFailureListener { e ->
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.e(TAG, "[P2P][BYTES_SEND_FAILED] endpoint=$endpointId statusCode=$statusCode status=$statusStr error=${e.message}", e)
+            }
+    }
+
+    override fun sendFile(endpointId: String, file: java.io.File): Long {
+        if (!file.exists() || !file.isFile || file.length() == 0L) {
+            Log.e(TAG, "[P2P][FILE_SEND_ERROR] Target file does not exist or is empty: ${file.absolutePath}")
+            throw java.io.FileNotFoundException("File does not exist or is empty: ${file.absolutePath}")
+        }
+        Log.d(TAG, "[P2P][FILE_SEND_START] endpoint=$endpointId filename=${file.name} absolutePath=${file.absolutePath} size=${file.length()} bytes")
+        val pfd = android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+        val payload = Payload.fromFile(pfd)
+        Log.d(TAG, "[P2P][FILE_PAYLOAD_CREATED] payloadId=${payload.id} filename=${file.name} size=${file.length()} bytes")
+        connectionsClient.sendPayload(endpointId, payload)
+            .addOnSuccessListener { Log.d(TAG, "[P2P][FILE_PAYLOAD_SENT] payloadId=${payload.id} sent to $endpointId") }
+            .addOnFailureListener { e ->
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.e(TAG, "[P2P][FILE_PAYLOAD_FAILED] payloadId=${payload.id} endpoint=$endpointId statusCode=$statusCode status=$statusStr error=${e.message}", e)
+            }
+        return payload.id
     }
 
     override fun sendFile(endpointId: String, fileUri: Uri): Long {
-        val payload = Payload.fromFile(context.contentResolver.openFileDescriptor(fileUri, "r")!!)
+        val filePath = fileUri.path
+        if (filePath != null) {
+            val file = java.io.File(filePath)
+            if (file.exists()) {
+                return sendFile(endpointId, file)
+            }
+        }
+        Log.d(TAG, "[P2P][FILE_SEND_START] endpoint=$endpointId uri=$fileUri")
+        val pfd = context.contentResolver.openFileDescriptor(fileUri, "r")
+            ?: throw java.io.FileNotFoundException("Could not open FileDescriptor for $fileUri")
+        val payload = Payload.fromFile(pfd)
+        Log.d(TAG, "[P2P][FILE_PAYLOAD_CREATED] payloadId=${payload.id} from uri=$fileUri")
         connectionsClient.sendPayload(endpointId, payload)
+            .addOnSuccessListener { Log.d(TAG, "[P2P][FILE_PAYLOAD_SENT] payloadId=${payload.id} sent to $endpointId") }
+            .addOnFailureListener { e ->
+                val statusCode = (e as? com.google.android.gms.common.api.ApiException)?.statusCode ?: -1
+                val statusStr = ConnectionsStatusCodes.getStatusCodeString(statusCode)
+                Log.e(TAG, "[P2P][FILE_PAYLOAD_FAILED] payloadId=${payload.id} endpoint=$endpointId statusCode=$statusCode status=$statusStr error=${e.message}", e)
+            }
         return payload.id
     }
 }

@@ -26,4 +26,22 @@ object P2PPermissions {
             add(Manifest.permission.NEARBY_WIFI_DEVICES)
         }
     }.toTypedArray()
+
+    fun hasAllPermissions(context: android.content.Context): Boolean {
+        return required.all { permission ->
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    fun getMissingPermissions(context: android.content.Context): List<String> {
+        return required.filter { permission ->
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                permission
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
 }

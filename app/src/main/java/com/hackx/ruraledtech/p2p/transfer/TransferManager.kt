@@ -133,12 +133,31 @@ class TransferManager(
 
     /** Triggers sending the registered outbound transfer file. */
     fun startOutboundTransfer(transferId: String): Long? {
-        val transfer = pendingTransfersByTransferId[transferId] ?: return null
-        if (transfer.fileUri == null) return null
+        val transfer = pendingTransfersByTransferId[transferId] ?: run {
+            Log.e(TAG, "[P2P][FILE_SEND_ERROR] No pending transfer found for transferId $transferId")
+            return null
+        }
 
-        Log.d(TAG, "Starting outbound file transfer $transferId to ${transfer.endpointId}")
-        val payloadId = connectionManager.sendFile(transfer.endpointId, transfer.fileUri)
+        val zipFile = packageStorageManager?.getPackageZipFile(transfer.packageId)
+
+        val payloadId = if (zipFile != null && zipFile.exists() && zipFile.length() > 0) {
+            Log.d(TAG, "[P2P][FILE_SEND_START] Outbound transfer $transferId using File ${zipFile.absolutePath} (${zipFile.length()} bytes)")
+            connectionManager.sendFile(transfer.endpointId, zipFile)
+        } else if (transfer.fileUri != null) {
+            Log.d(TAG, "[P2P][FILE_SEND_START] Outbound transfer $transferId using Uri ${transfer.fileUri}")
+            connectionManager.sendFile(transfer.endpointId, transfer.fileUri)
+        } else {
+            Log.e(TAG, "[P2P][FILE_SEND_ERROR] Cannot start outbound transfer $transferId: no valid file or URI found for package ${transfer.packageId}")
+            return null
+        }
+
         associatePayloadId(transfer.endpointId, payloadId, transferId)
+        _transfersMap.value = _transfersMap.value + (transferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
+            transferId = transferId,
+            packageId = transfer.packageId,
+            state = com.hackx.ruraledtech.p2p.mesh.TransferState.TRANSFERRING,
+            progressPercent = 0
+        ))
         return payloadId
     }
 
@@ -202,11 +221,15 @@ class TransferManager(
         ))
 
         coroutineScope.launch {
-            Log.d(TAG, "Verifying downloaded package ${finalTransfer.packageId} (transfer $finalTransferId)...")
+            val calculatedSha256 = packageStorageManager?.computeSha256(tempFile) ?: ""
+            Log.d(TAG, "[P2P][FILE_RECEIVED] payloadId=$payloadId from $endpointId tempFile=${tempFile.absolutePath} size=${tempFile.length()} bytes")
+            Log.d(TAG, "[P2P][SHA256_EXPECTED] hash=${finalTransfer.expectedHash}")
+            Log.d(TAG, "[P2P][SHA256_ACTUAL] hash=$calculatedSha256")
+
             val isValid = PackageVerifier.verifyFile(tempFile, finalTransfer.expectedHash, ioDispatcher)
 
             if (!isValid) {
-                Log.e(TAG, "Verification FAILED for ${finalTransfer.packageId}. Tampered or corrupted file. Deleting.")
+                Log.e(TAG, "[P2P][SHA256_VERIFY_FAILED] Expected ${finalTransfer.expectedHash} but computed $calculatedSha256 for package ${finalTransfer.packageId}. Deleting temp file.")
                 tempFile.delete()
                 _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
                     transferId = finalTransferId,
@@ -217,10 +240,11 @@ class TransferManager(
                 return@launch
             }
 
-            Log.d(TAG, "Verification SUCCESS for ${finalTransfer.packageId}. Storing for store-and-forward and installing.")
+            Log.d(TAG, "[P2P][SHA256_VERIFIED] Package ${finalTransfer.packageId} SHA-256 verified successfully!")
 
             // Persist ZIP for store-and-forward
-            packageStorageManager?.savePackageZip(finalTransfer.packageId, tempFile)
+            val savedZip = packageStorageManager?.savePackageZip(finalTransfer.packageId, tempFile)
+            Log.d(TAG, "[P2P][PACKAGE_STORE] Saved ZIP archive into PackageStorageManager: ${savedZip?.absolutePath}")
 
             val installDir = if (tempFile.name.endsWith(".zip", ignoreCase = true) || isZipArchive(tempFile)) {
                 val targetDir = File(tempFile.parentFile, "extracted_${finalTransfer.packageId}_${System.currentTimeMillis()}")
@@ -233,7 +257,7 @@ class TransferManager(
             val installedSuccessfully = performInstall(installDir.absolutePath)
 
             if (installedSuccessfully) {
-                Log.d(TAG, "Package ${finalTransfer.packageId} installed successfully into Room database!")
+                Log.d(TAG, "[P2P][PACKAGE_INSTALL] Package ${finalTransfer.packageId} installed successfully into Room database!")
                 _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
                     transferId = finalTransferId,
                     packageId = finalTransfer.packageId,
@@ -243,7 +267,7 @@ class TransferManager(
                 onSuccess?.invoke(finalTransfer.packageId, finalTransfer.version, finalTransfer.expectedHash)
                 onPackageInstalled?.invoke(finalTransfer.packageId, finalTransfer.version)
             } else {
-                Log.e(TAG, "ContentInstaller failed to install package ${finalTransfer.packageId}")
+                Log.e(TAG, "[P2P][PACKAGE_INSTALL_FAILED] ContentInstaller failed to install package ${finalTransfer.packageId}")
                 _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
                     transferId = finalTransferId,
                     packageId = finalTransfer.packageId,

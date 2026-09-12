@@ -17,4 +17,5 @@ interface P2PConnectionManager {
     
     fun sendBytes(endpointId: String, bytes: ByteArray)
     fun sendFile(endpointId: String, fileUri: Uri): Long // Returns payloadId
+    fun sendFile(endpointId: String, file: java.io.File): Long // Returns payloadId
 }

@@ -1,6 +1,7 @@
 package com.hackx.ruraledtech.feature.teacher
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,9 +86,13 @@ fun ClassAnalyticsScreen(
     var reportContent by remember { mutableStateOf("") }
     var lastSharedPackage by remember { mutableStateOf<String?>(null) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        if (results.values.any { it }) {
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        val missing = P2PPermissions.getMissingPermissions(context)
+        if (missing.isEmpty()) {
             viewModel.startMesh()
+        } else {
+            android.widget.Toast.makeText(context, "Bluetooth & Nearby permissions are required for P2P mesh", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 

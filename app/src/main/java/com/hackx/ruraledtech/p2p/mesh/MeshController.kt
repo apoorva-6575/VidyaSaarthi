@@ -40,6 +40,7 @@ class MeshController(
 
     private var localManifest = ContentManifest(deviceId, 1, emptyList())
     private val connectedEndpoints = mutableSetOf<String>()
+    private val pendingConnections = mutableSetOf<String>()
 
     /**
      * Connected peer endpoint IDs were tracked internally but never exposed anywhere the UI
@@ -130,23 +131,32 @@ class MeshController(
     // --- TRANSPORT LIFECYCLE ---
 
     override fun onPeerDiscovered(endpointId: String, endpointName: String) {
-        Log.d(TAG, "Peer discovered: $endpointId ($endpointName). Requesting connection.")
-        if (!connectedEndpoints.contains(endpointId)) {
-            connectionManager.requestConnection(endpointId, endpointName)
+        Log.d(TAG, "[P2P][DISCOVERED] Peer discovered: endpointId=$endpointId name=$endpointName")
+        if (connectedEndpoints.contains(endpointId)) {
+            Log.d(TAG, "[P2P] Already connected to $endpointId; ignoring discovery.")
+            return
         }
+        if (pendingConnections.contains(endpointId)) {
+            Log.d(TAG, "[P2P] Connection to $endpointId is already pending; ignoring duplicate discovery.")
+            return
+        }
+        pendingConnections.add(endpointId)
+        connectionManager.requestConnection(endpointId, endpointName)
     }
 
     override fun onPeerLost(endpointId: String) {
-        Log.d(TAG, "Peer lost: $endpointId")
+        Log.d(TAG, "[P2P][PEER_LOST] Peer lost: $endpointId")
+        pendingConnections.remove(endpointId)
     }
 
     override fun onConnectionInitiated(endpointId: String, endpointName: String, authToken: String) {
-        Log.d(TAG, "Connection initiated with $endpointId ($endpointName). Auto-accepting.")
+        Log.d(TAG, "[P2P][INITIATED] Connection initiated with endpoint=$endpointId name=$endpointName auth=$authToken. Auto-accepting.")
         connectionManager.acceptConnection(endpointId)
     }
 
     override fun onConnectionAccepted(endpointId: String) {
-        Log.d(TAG, "Connection accepted with $endpointId. Sending Hello & Local Manifest.")
+        Log.d(TAG, "[P2P][CONNECTED] Connection accepted with endpoint=$endpointId. Sending Hello & Local Manifest.")
+        pendingConnections.remove(endpointId)
         connectedEndpoints.add(endpointId)
         _connectedEndpointsFlow.value = connectedEndpoints.toSet()
 
@@ -214,11 +224,13 @@ class MeshController(
     }
 
     override fun onConnectionRejected(endpointId: String) {
-        Log.w(TAG, "Connection rejected by $endpointId")
+        Log.w(TAG, "[P2P][CONNECTION_REJECTED] Connection rejected by $endpointId")
+        pendingConnections.remove(endpointId)
     }
 
     override fun onDisconnected(endpointId: String) {
-        Log.d(TAG, "Disconnected from $endpointId")
+        Log.d(TAG, "[P2P][DISCONNECTED] Disconnected from $endpointId")
+        pendingConnections.remove(endpointId)
         connectedEndpoints.remove(endpointId)
         _connectedEndpointsFlow.value = connectedEndpoints.toSet()
     }

@@ -138,13 +138,13 @@ class SubmitQuizAttemptUseCase @Inject constructor(
 class GetQuestionsForLessonUseCase @Inject constructor(
     private val repository: QuizRepository,
     private val progressRepository: ProgressRepository,
-    private val lessonDao: LessonDao,
-    private val questionDao: QuestionDao,
+    private val lessonDao: LessonDao? = null,
+    private val questionDao: QuestionDao? = null,
 ) {
     suspend operator fun invoke(lessonId: String, learnerId: String): List<Question> {
         var questions = repository.getQuestionsForLesson(lessonId)
         if (questions.isEmpty()) {
-            val lesson = lessonDao.getById(lessonId)
+            val lesson = lessonDao?.getById(lessonId)
             if (lesson != null) {
                 val fallbackQ = QuestionEntity(
                     questionId = "q_${lessonId}_auto",
@@ -158,7 +158,7 @@ class GetQuestionsForLessonUseCase @Inject constructor(
                     difficulty = 0.3f,
                     explanation = "This lesson covers ${lesson.title}."
                 )
-                questionDao.insertAll(listOf(fallbackQ))
+                questionDao?.insertAll(listOf(fallbackQ))
                 questions = repository.getQuestionsForLesson(lessonId)
             }
         }

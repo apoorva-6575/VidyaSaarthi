@@ -79,12 +79,25 @@ fun ContentLibraryScreen(
     var showCreateMaterialDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        if (results.values.any { it }) {
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
+        val missing = P2PPermissions.getMissingPermissions(context)
+        if (missing.isEmpty()) {
+            android.util.Log.d("ContentLibraryScreen", "[P2P][PERMISSION] All required P2P permissions granted. Starting mesh.")
             viewModel.findNearbyDevice()
+        } else {
+            android.util.Log.e("ContentLibraryScreen", "[P2P][PERMISSION_DENIED] Cannot start mesh. Missing permissions: $missing")
+            android.widget.Toast.makeText(context, "Bluetooth & Nearby permissions are required for P2P mesh", android.widget.Toast.LENGTH_LONG).show()
         }
     }
-    val onStartMesh = remember { { permissionLauncher.launch(P2PPermissions.required) } }
+    val onStartMesh = remember(context) {
+        {
+            if (P2PPermissions.hasAllPermissions(context)) {
+                viewModel.findNearbyDevice()
+            } else {
+                permissionLauncher.launch(P2PPermissions.required)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
