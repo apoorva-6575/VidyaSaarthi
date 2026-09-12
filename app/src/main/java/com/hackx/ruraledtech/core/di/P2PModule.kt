@@ -80,6 +80,9 @@ object P2PModule {
         passportManager: PassportManager,
         packageStorageManager: PackageStorageManager,
         contentPackageDao: ContentPackageDao,
+        learnerDao: com.hackx.ruraledtech.data.local.dao.LearnerDao,
+        classGroupDao: com.hackx.ruraledtech.data.local.dao.ClassGroupDao,
+        currentLearnerManager: com.hackx.ruraledtech.core.session.CurrentLearnerManager,
     ): MeshController {
         val controller = MeshController(
             connectionManager = connectionManager,
@@ -87,6 +90,9 @@ object P2PModule {
             transferManager = transferManager,
             packageStorageManager = packageStorageManager,
             contentPackageDao = contentPackageDao,
+            learnerDao = learnerDao,
+            classGroupDao = classGroupDao,
+            currentLearnerManager = currentLearnerManager,
         )
         connectionManager.setListener(controller)
         controller.setPassportManager(passportManager)

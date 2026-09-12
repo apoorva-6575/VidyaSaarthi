@@ -110,30 +110,44 @@ class NearbyConnectionManagerImpl @Inject constructor(
             .setDisruptiveUpgrade(false)
             .build()
         connectionsClient.startAdvertising(deviceName, serviceId, connectionLifecycleCallback, options)
-            .addOnSuccessListener { Log.d(TAG, "Advertising started") }
-            .addOnFailureListener { Log.e(TAG, "Advertising failed", it) }
+            .addOnSuccessListener { Log.d(TAG, "Advertising started: $deviceName") }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Advertising failed: ${e.message}", e)
+            }
     }
 
     override fun stopAdvertising() {
-        connectionsClient.stopAdvertising()
+        try {
+            connectionsClient.stopAdvertising()
+        } catch (e: Exception) {
+            Log.w(TAG, "stopAdvertising warning", e)
+        }
     }
 
     override fun startDiscovery() {
         val options = DiscoveryOptions.Builder().setStrategy(strategy).build()
         connectionsClient.startDiscovery(serviceId, endpointDiscoveryCallback, options)
-            .addOnSuccessListener { Log.d(TAG, "Discovery started") }
-            .addOnFailureListener { Log.e(TAG, "Discovery failed", it) }
+            .addOnSuccessListener { Log.d(TAG, "Discovery started for $serviceId") }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Discovery failed: ${e.message}", e)
+            }
     }
 
     override fun stopDiscovery() {
-        connectionsClient.stopDiscovery()
+        try {
+            connectionsClient.stopDiscovery()
+        } catch (e: Exception) {
+            Log.w(TAG, "stopDiscovery warning", e)
+        }
     }
 
     override fun requestConnection(endpointId: String, endpointName: String) {
         Log.d(TAG, "Requesting connection to $endpointId ($endpointName)")
         connectionsClient.requestConnection(endpointName, endpointId, connectionLifecycleCallback)
             .addOnSuccessListener { Log.d(TAG, "Connection request sent to $endpointId") }
-            .addOnFailureListener { Log.e(TAG, "Failed to request connection to $endpointId", it) }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "Connection request to $endpointId completed/ignored: ${e.message}")
+            }
     }
 
     override fun acceptConnection(endpointId: String) {

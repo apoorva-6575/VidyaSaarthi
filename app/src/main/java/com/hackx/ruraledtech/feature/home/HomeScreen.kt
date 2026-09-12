@@ -70,6 +70,7 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsState()
     val classLessons by viewModel.classLessons.collectAsState()
     val generalLessons by viewModel.generalLessons.collectAsState()
+    val enrolledClasses by viewModel.enrolledClasses.collectAsState()
     val isSpeaking by viewModel.isSpeaking.collectAsState()
     val lang = state.learner?.preferredLanguage ?: "en"
 
@@ -200,6 +201,44 @@ fun HomeScreen(
                                 "${recommendation.recommendationType.name.replace('_', ' ')} — ${recommendation.conceptName}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (enrolledClasses.isNotEmpty()) {
+                item {
+                    Text(
+                        "🏫 My Enrolled Classes (${enrolledClasses.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+                items(enrolledClasses) { cls ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(cls.name, style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "${cls.subject ?: "General"} · Grade ${cls.grade ?: "Any"} · Code: ${cls.classId.take(6).uppercase()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            androidx.compose.material3.SuggestionChip(
+                                onClick = onOpenProfile,
+                                label = { Text("● Enrolled") }
                             )
                         }
                     }

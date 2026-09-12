@@ -35,6 +35,7 @@ class ProfileViewModel @Inject constructor(
     private val api: RuralEdTechApi,
     private val learnerRepository: LearnerRepository,
     private val textToSpeechEngine: TextToSpeechEngine,
+    private val meshController: com.hackx.ruraledtech.p2p.mesh.MeshController,
 ) : ViewModel() {
 
     val learner: StateFlow<Learner?> = currentLearnerManager.currentLearnerId
@@ -144,6 +145,7 @@ class ProfileViewModel @Inject constructor(
                 classGroupDao.insertLearnerMapping(
                     ClassGroupLearnerEntity(localClass.classId, currentLearner.learnerId)
                 )
+                meshController.broadcastLearnerSync()
                 onResult(true, "Joined ${localClass.name} (offline mode)")
             } else {
                 // Auto-create local offline class group with this join code so learner is never blocked
@@ -160,6 +162,7 @@ class ProfileViewModel @Inject constructor(
                 classGroupDao.insertLearnerMapping(
                     ClassGroupLearnerEntity(offlineClassId, currentLearner.learnerId)
                 )
+                meshController.broadcastLearnerSync()
                 onResult(true, "Joined Class $cleanCode (offline peer mode)!")
             }
         }

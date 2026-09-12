@@ -12,18 +12,18 @@ import android.os.Build
  * than throwing if scanning/advertising permissions are missing.
  */
 object P2PPermissions {
-    val required: Array<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        arrayOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_ADVERTISE,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.NEARBY_WIFI_DEVICES,
-        )
-    } else {
-        arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-        )
-    }
+    val required: Array<String> = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_SCAN)
+            add(Manifest.permission.BLUETOOTH_ADVERTISE)
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+        } else {
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+    }.toTypedArray()
 }

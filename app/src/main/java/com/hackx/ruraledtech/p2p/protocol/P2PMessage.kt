@@ -63,4 +63,16 @@ sealed interface P2PMessage {
         override val timestamp: Long,
         val passport: com.hackx.ruraledtech.p2p.passport.model.LearningPassport
     ) : P2PMessage
+
+    @Serializable
+    data class LearnerSync(
+        override val messageId: String,
+        override val senderDeviceId: String,
+        override val timestamp: Long,
+        val learnerId: String,
+        val name: String,
+        val grade: Int,
+        val preferredLanguage: String,
+        val enrolledClassIds: List<String> = emptyList(),
+    ) : P2PMessage
 }

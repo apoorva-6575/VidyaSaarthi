@@ -84,6 +84,10 @@ class HomeViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val enrolledClasses: StateFlow<List<ClassGroupEntity>> = learnerId
+        .flatMapLatest { id -> classGroupDao.observeClassesForLearner(id) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /** General lessons not tied to any class (available to all learners). */
     val generalLessons: StateFlow<List<LessonEntity>> = lessonDao.observeUnassigned()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

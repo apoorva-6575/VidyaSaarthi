@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -27,6 +28,9 @@ class MeshController(
     private val transferManager: TransferManager? = null,
     private val packageStorageManager: PackageStorageManager? = null,
     private val contentPackageDao: com.hackx.ruraledtech.data.local.dao.ContentPackageDao? = null,
+    private val learnerDao: com.hackx.ruraledtech.data.local.dao.LearnerDao? = null,
+    private val classGroupDao: com.hackx.ruraledtech.data.local.dao.ClassGroupDao? = null,
+    private val currentLearnerManager: com.hackx.ruraledtech.core.session.CurrentLearnerManager? = null,
     private var passportManager: PassportManager? = null,
     private val deviceId: String = UUID.randomUUID().toString(),
     private val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
@@ -157,6 +161,38 @@ class MeshController(
         coroutineScope.launch {
             syncManifestFromDatabase()
             broadcastLocalManifest(endpointId)
+            broadcastLearnerSync(endpointId)
+        }
+    }
+
+    fun broadcastLearnerSync(endpointId: String? = null) {
+        coroutineScope.launch {
+            try {
+                val learnerId = currentLearnerManager?.currentLearnerId?.firstOrNull() ?: return@launch
+                val learner = learnerDao?.getById(learnerId) ?: return@launch
+                val enrolledClasses = classGroupDao?.observeClassesForLearner(learnerId)?.firstOrNull() ?: emptyList()
+                val classIds = enrolledClasses.map { it.classId }
+
+                val syncMsg = P2PMessage.LearnerSync(
+                    messageId = UUID.randomUUID().toString(),
+                    senderDeviceId = deviceId,
+                    timestamp = System.currentTimeMillis(),
+                    learnerId = learner.learnerId,
+                    name = learner.name,
+                    grade = learner.grade,
+                    preferredLanguage = learner.preferredLanguage,
+                    enrolledClassIds = classIds
+                )
+                val payload = ProtocolSerializer.serialize(syncMsg)
+                if (endpointId != null) {
+                    connectionManager.sendBytes(endpointId, payload)
+                } else {
+                    connectedEndpoints.forEach { connectionManager.sendBytes(it, payload) }
+                }
+                Log.d(TAG, "Broadcasted LearnerSync for student ${learner.name} with ${classIds.size} class enrollments.")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to broadcast LearnerSync", e)
+            }
         }
     }
 
@@ -210,6 +246,36 @@ class MeshController(
             is P2PMessage.PassportTransfer -> {
                 Log.d(TAG, "Received PassportTransfer from ${message.senderDeviceId}")
                 passportManager?.onPassportReceived(message.passport)
+            }
+            is P2PMessage.LearnerSync -> {
+                Log.d(TAG, "Received P2P LearnerSync from $endpointId: Student ${message.name} (${message.learnerId}) enrolled in: ${message.enrolledClassIds}")
+                coroutineScope.launch {
+                    try {
+                        val now = System.currentTimeMillis()
+                        learnerDao?.upsert(
+                            com.hackx.ruraledtech.data.local.entities.LearnerEntity(
+                                learnerId = message.learnerId,
+                                name = message.name,
+                                grade = message.grade,
+                                preferredLanguage = message.preferredLanguage,
+                                avatarKey = "avatar_1",
+                                createdAt = now,
+                                updatedAt = now,
+                                lastActiveAt = now,
+                            )
+                        )
+                        message.enrolledClassIds.forEach { cid ->
+                            classGroupDao?.insertLearnerMapping(
+                                com.hackx.ruraledtech.data.local.entities.ClassGroupLearnerEntity(
+                                    classId = cid,
+                                    learnerId = message.learnerId
+                                )
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error handling LearnerSync over P2P", e)
+                    }
+                }
             }
         }
     }
