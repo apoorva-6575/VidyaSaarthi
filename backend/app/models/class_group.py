@@ -8,6 +8,7 @@ class ClassGroup(Base):
     __tablename__ = "classes"
     
     id = Column(String, primary_key=True, index=True)
+    join_code = Column(String, unique=True, index=True, nullable=False)
     name = Column(String, nullable=False)
     grade = Column(String, nullable=True)
     subject = Column(String, nullable=True)

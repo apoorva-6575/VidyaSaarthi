@@ -33,6 +33,7 @@ object DatabaseModule {
                 DatabaseMigrations.MIGRATION_1_2,
                 DatabaseMigrations.MIGRATION_2_3,
                 DatabaseMigrations.MIGRATION_3_4,
+                DatabaseMigrations.MIGRATION_4_5,
             )
             .fallbackToDestructiveMigration() // safety net only — real migrations above are tried first
             .build()
@@ -72,4 +73,10 @@ object DatabaseModule {
 
     @Provides
     fun provideTeacherCacheDao(db: AppDatabase): com.hackx.ruraledtech.data.local.dao.TeacherCacheDao = db.teacherCacheDao()
+
+    @Provides
+    fun provideClassMaterialAssignmentDao(db: AppDatabase): com.hackx.ruraledtech.data.local.dao.ClassMaterialAssignmentDao = db.classMaterialAssignmentDao()
+
+    @Provides
+    fun provideMaterialRequestDao(db: AppDatabase): com.hackx.ruraledtech.data.local.dao.MaterialRequestDao = db.materialRequestDao()
 }

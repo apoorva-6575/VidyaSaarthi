@@ -10,17 +10,15 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission
-        android:name="android.permission.ACCESS_WIFI_STATE"
-        android:maxSdkVersion="31" />
+        android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission
-        android:name="android.permission.CHANGE_WIFI_STATE"
-        android:maxSdkVersion="31" />
+        android:name="android.permission.CHANGE_WIFI_STATE" />
 
     <!-- Android 12+ (API 31+) Bluetooth/Nearby permissions -->
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
     <!-- Location is still required for nearby discovery on many devices/older Android versions -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -55,6 +53,18 @@
             android:authorities="${applicationId}.androidx-startup"
             android:exported="false"
             tools:node="merge" />
+
+        <!-- Lets the Lesson Viewer open a received PDF/PPT/etc. via ACTION_VIEW in whatever
+             app the phone already has for it, without bundling a document renderer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

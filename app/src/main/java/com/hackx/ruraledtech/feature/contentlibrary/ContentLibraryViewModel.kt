@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.hackx.ruraledtech.core.session.CurrentLearnerManager
 import com.hackx.ruraledtech.core.work.SyncScheduler
 import com.hackx.ruraledtech.data.contentpackage.ContentPackageReader
 import com.hackx.ruraledtech.data.local.dao.ContentPackageDao
@@ -28,9 +29,12 @@ import com.hackx.ruraledtech.p2p.storage.PackageStorageManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
@@ -61,15 +65,24 @@ class ContentLibraryViewModel @Inject constructor(
     private val lessonDao: LessonDao,
     private val questionDao: QuestionDao,
     private val contentPackageDao: ContentPackageDao,
-    private val classGroupDao: com.hackx.ruraledtech.data.local.dao.ClassGroupDao,
+    private val classroomMeshCoordinator: com.hackx.ruraledtech.domain.usecase.mesh.ClassroomMeshCoordinator,
+    private val materialRequestDao: com.hackx.ruraledtech.data.local.dao.MaterialRequestDao,
+    private val currentLearnerManager: CurrentLearnerManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-    val packages: StateFlow<List<ContentPackage>> = observeInstalledPackagesUseCase()
+    /**
+     * Scoped to the active learner profile — previously this showed every installed package on
+     * the device to every profile, so a sibling using a different profile on the same device
+     * could see material another sibling had privately received via P2P. Falls back to an
+     * empty-string "no learner" key in teacher mode, which still shows shared/global content
+     * (receivedByLearnerId IS NULL) — see ContentPackageDao.observeInstalledForLearner.
+     */
+    val packages: StateFlow<List<ContentPackage>> = currentLearnerManager.currentLearnerId
+        .flatMapLatest { learnerId -> observeInstalledPackagesUseCase(learnerId ?: "") }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val teacherClasses: StateFlow<List<com.hackx.ruraledtech.data.local.entities.ClassGroupEntity>> = classGroupDao.observeAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
 
     val meshState: StateFlow<MeshState> = learningMesh.observeMeshState()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MeshState.OFFLINE)
@@ -84,13 +97,62 @@ class ContentLibraryViewModel @Inject constructor(
         learningMesh.observeAvailablePeerPackages()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val incomingOffers: StateFlow<List<com.hackx.ruraledtech.p2p.protocol.P2PMessage.ClassMaterialOffer>> = classroomMeshCoordinator.incomingOffers
+        .scan(emptyList<com.hackx.ruraledtech.p2p.protocol.P2PMessage.ClassMaterialOffer>()) { acc, offer ->
+            acc + offer
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val materialRequests: StateFlow<List<com.hackx.ruraledtech.data.local.entities.MaterialRequestEntity>> = materialRequestDao.observeIncomingRequests()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun acceptOffer(offer: com.hackx.ruraledtech.p2p.protocol.P2PMessage.ClassMaterialOffer) {
+        viewModelScope.launch {
+            classroomMeshCoordinator.acceptOffer(offer)
+        }
+    }
+
+    fun approveRequest(requestId: String) {
+        viewModelScope.launch {
+            classroomMeshCoordinator.approveRequest(requestId)
+        }
+    }
+
+    fun declineRequest(requestId: String) {
+        viewModelScope.launch {
+            classroomMeshCoordinator.declineRequest(requestId)
+        }
+    }
+
     fun remove(packageId: String) {
         viewModelScope.launch { removeContentPackageUseCase(packageId) }
     }
 
+    private val _shareErrors = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    val shareErrors: kotlinx.coroutines.flow.SharedFlow<String> = _shareErrors.asSharedFlow()
+
     fun sharePackage(packageId: String) {
         viewModelScope.launch {
+            val zipFile = packageStorageManager.getPackageZipFile(packageId)
+            if (zipFile == null || !zipFile.exists()) {
+                val errorMsg = "Material isn't available locally on this device."
+                android.util.Log.e("ContentLibraryViewModel", errorMsg)
+                _shareErrors.emit(errorMsg)
+                return@launch
+            }
+            android.util.Log.d("ContentLibraryViewModel", "Verified ZIP exists for $packageId: ${zipFile.absolutePath} (size=${zipFile.length()} sha256=${packageStorageManager.computeSha256(zipFile)})")
+            // Real byte transfer to already-connected peers (existing, working pipeline).
             learningMesh.broadcastPackage(packageId)
+            // Classroom-aware notification so peers see "Shared by Teacher" — this alone sends
+            // no bytes; it was previously never called at all, so that UI section was always
+            // empty even though the transfer above already worked.
+            val pkg = contentPackageDao.getLatest(packageId)
+            classroomMeshCoordinator.broadcastOffer(
+                packageId = packageId,
+                version = pkg?.version ?: 1,
+                subject = pkg?.subject ?: "General",
+                sizeBytes = zipFile.length(),
+            )
         }
     }
 
@@ -112,7 +174,17 @@ class ContentLibraryViewModel @Inject constructor(
         syncScheduler.scheduleContentUpdateCheck()
     }
 
+    /**
+     * Remembered so [createAndUploadMaterial] can also copy the ORIGINAL file bytes into the
+     * package (not just extracted text) — previously the picked PPT/PDF's Uri was discarded
+     * right after text extraction, so a student could never actually open the source document,
+     * only read a plain-text (or placeholder) rendering of it.
+     */
+    private var lastPickedFileUri: Uri? = null
+    private var lastPickedFileName: String? = null
+
     fun processPickedFile(uri: Uri, onParsed: (title: String, content: String) -> Unit) {
+        lastPickedFileUri = uri
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 var fileName = "Uploaded Document"
@@ -122,6 +194,7 @@ class ContentLibraryViewModel @Inject constructor(
                         fileName = cursor.getString(nameIndex)
                     }
                 }
+                lastPickedFileName = fileName
                 val cleanTitle = fileName.substringBeforeLast('.')
                     .replace('_', ' ')
                     .replace('-', ' ')
@@ -158,7 +231,6 @@ class ContentLibraryViewModel @Inject constructor(
         language: String,
         conceptName: String,
         content: String,
-        classId: String? = null,
         questionPrompt: String? = null,
         optionA: String? = null,
         optionB: String? = null,
@@ -189,6 +261,39 @@ class ContentLibraryViewModel @Inject constructor(
                 val lessonId = "lesson_${slug}_1"
                 val conceptId = "concept_${slug}"
 
+                // Copy the ORIGINAL picked file (PPT/PDF/etc.) into the package so the student
+                // can actually open the source document, not just read extracted plain text.
+                // Previously the Uri was discarded right after text extraction.
+                var documentBlockJson = ""
+                val pickedUri = lastPickedFileUri
+                if (pickedUri != null) {
+                    val originalName = lastPickedFileName ?: "document"
+                    val ext = originalName.substringAfterLast('.', "").ifBlank { "bin" }
+                    val assetsDir = File(buildDir, "assets")
+                    assetsDir.mkdirs()
+                    val destFile = File(assetsDir, "document.$ext")
+                    try {
+                        context.contentResolver.openInputStream(pickedUri)?.use { input ->
+                            destFile.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        if (destFile.exists() && destFile.length() > 0) {
+                            documentBlockJson = """
+                                ,
+                                {
+                                    "type": "DOCUMENT",
+                                    "block_id": "b2",
+                                    "asset_path": "assets/document.$ext",
+                                    "alt_text": "${originalName.replace("\"", "\\\"")}"
+                                }
+                            """.trimIndent()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ContentLibraryViewModel", "Could not copy original document into package", e)
+                    }
+                }
+                lastPickedFileUri = null
+                lastPickedFileName = null
+
                 val lessonJson = """
                 {
                     "lesson_id": "$lessonId",
@@ -199,13 +304,12 @@ class ContentLibraryViewModel @Inject constructor(
                     "language": "$language",
                     "title": "$cleanTitle",
                     "order_index": 0,
-                    ${if (classId != null) "\"class_id\": \"$classId\"," else ""}
                     "blocks": [
                         {
-                            "type": "text",
-                            "id": "b1",
-                            "text": "${content.replace("\"", "\\\"").replace("\n", "\\n")}"
-                        }
+                            "type": "TEXT",
+                            "block_id": "b1",
+                            "body": "${content.replace("\"", "\\\"").replace("\n", "\\n")}"
+                        }$documentBlockJson
                     ]
                 }
                 """.trimIndent()
@@ -219,14 +323,14 @@ class ContentLibraryViewModel @Inject constructor(
                     "question_id": "q_${slug}_1",
                     "lesson_id": "$lessonId",
                     "concept_id": "$conceptId",
-                    "question_type": "single_choice",
+                    "question_type": "SINGLE_CHOICE",
                     "language": "$language",
                     "prompt": "${qPrompt.replace("\"", "\\\"")}",
                     "options": [
-                        {"id": "a", "text": "${optA.replace("\"", "\\\"")}"},
-                        {"id": "b", "text": "${optB.replace("\"", "\\\"")}"}
+                        {"option_id": "a", "text": "${optA.replace("\"", "\\\"")}"},
+                        {"option_id": "b", "text": "${optB.replace("\"", "\\\"")}"}
                     ],
-                    "correct_answer": "$correctOption",
+                    "correct_option_id": "$correctOption",
                     "difficulty": 0.3,
                     "explanation": "This lesson covers $cleanConcept."
                 }
@@ -264,7 +368,7 @@ class ContentLibraryViewModel @Inject constructor(
                     "dependencies": [],
                     "checksum": "$packageChecksum",
                     "created_at": "2026-09-12T00:00:00Z",
-                    "priority": "normal"${if (classId != null) ",\n    \"class_id\": \"$classId\"" else ""}
+                    "priority": "normal"
                 }
                 """.trimIndent()
                 File(buildDir, "manifest.json").writeText(manifestJson)
@@ -337,8 +441,7 @@ class ContentLibraryViewModel @Inject constructor(
                             language = language,
                             title = cleanTitle,
                             orderIndex = 0,
-                            blocksJson = lessonBlockJson,
-                            classId = classId, // link to the teacher's class
+                            blocksJson = lessonBlockJson
                         )
                     )
                 )

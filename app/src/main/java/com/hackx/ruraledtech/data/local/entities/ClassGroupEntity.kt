@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "class_groups")
 data class ClassGroupEntity(
     @PrimaryKey val classId: String,
+    val joinCode: String,
     val name: String,
     val grade: String?,
     val subject: String?,

@@ -6,3 +6,5 @@ from app.models.class_group import ClassGroup  # noqa
 from app.models.learning_event import LearningEvent  # noqa
 from app.models.content import ContentPackage  # noqa
 from app.models.sync_state import SyncState  # noqa
+from app.models.class_material import ClassMaterialAssignment  # noqa
+from app.models.material_request import MaterialRequest  # noqa

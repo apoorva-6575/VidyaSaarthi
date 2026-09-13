@@ -21,7 +21,7 @@ android {
         vectorDrawables.useSupportLibrary = true
         // 10.0.2.2 only resolves on the emulator (alias for the host's localhost) — a real
         // phone on the same Wi-Fi needs the dev machine's actual LAN IP instead.
-        buildConfigField("String", "BACKEND_URL", "\"http://172.20.10.2:8000/\"")
+        buildConfigField("String", "BACKEND_URL", "\"http://10.68.1.85:8000/\"")
     }
 
     buildTypes {

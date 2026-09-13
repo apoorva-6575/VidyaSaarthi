@@ -1,6 +1,8 @@
 package com.hackx.ruraledtech.data.contentpackage
 
+import android.content.Context
 import com.hackx.ruraledtech.core.common.SecureLogger
+import com.hackx.ruraledtech.core.session.CurrentLearnerManager
 import com.hackx.ruraledtech.data.contentpackage.dto.ContentBlockFileDto
 import com.hackx.ruraledtech.data.local.dao.ContentPackageDao
 import com.hackx.ruraledtech.data.local.dao.LessonDao
@@ -14,6 +16,7 @@ import com.hackx.ruraledtech.domain.integration.InstallResult
 import com.hackx.ruraledtech.domain.integration.ValidationResult
 import com.hackx.ruraledtech.domain.model.ContentPackage
 import com.hackx.ruraledtech.domain.model.ContentPackageState
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -32,6 +35,8 @@ class ContentInstallerImpl @Inject constructor(
     private val lessonDao: LessonDao,
     private val questionDao: QuestionDao,
     private val contentPackageDao: ContentPackageDao,
+    private val currentLearnerManager: CurrentLearnerManager,
+    @ApplicationContext private val context: Context,
 ) : ContentInstaller {
 
     override suspend fun validate(packagePath: String): ValidationResult {
@@ -72,6 +77,13 @@ class ContentInstallerImpl @Inject constructor(
             return InstallResult.Corrupted("Question JSON malformed: ${e.message}")
         }
 
+        // Whoever's profile is active on this device when a package is actually installed
+        // (P2P receipt, background backend download, or local authoring) owns it — previously
+        // nothing stamped this, so every learner sharing a device could see every other
+        // learner's personally-received material. Null (no active learner, e.g. teacher mode)
+        // falls back to shared/global visibility, same as pre-existing curriculum content.
+        val receivingLearnerId = currentLearnerManager.currentLearnerId.value
+
         val lessonEntities = lessonFiles.map { lesson ->
             LessonEntity(
                 lessonId = lesson.lessonId,
@@ -84,9 +96,10 @@ class ContentInstallerImpl @Inject constructor(
                 orderIndex = lesson.orderIndex,
                 blocksJson = json.encodeToString(
                     ListSerializer(ContentBlockDto.serializer()),
-                    lesson.blocks.map { it.toContentBlockDto() },
+                    lesson.blocks.map { it.toContentBlockDto().withPersistedAsset(dir, manifest.packageId) },
                 ),
                 classId = lesson.classId ?: manifest.classId,
+                receivedByLearnerId = receivingLearnerId,
             )
         }
         val questionEntities = questionFiles.map { q ->
@@ -121,7 +134,7 @@ class ContentInstallerImpl @Inject constructor(
                 installedAt = System.currentTimeMillis(),
                 state = ContentPackageState.INSTALLED,
                 priority = manifest.priority,
-            ).toEntity(),
+            ).toEntity().copy(receivedByLearnerId = receivingLearnerId),
         )
 
         return InstallResult.Success(manifest.packageId, manifest.version)
@@ -130,6 +143,31 @@ class ContentInstallerImpl @Inject constructor(
     override suspend fun remove(packageId: String, version: Int) {
         lessonDao.deleteForPackage(packageId)
         contentPackageDao.deletePackage(packageId)
+    }
+
+    /**
+     * [assetPath] on a block (image/audio/video/document) is a path relative to the package
+     * directory being installed from — which, for a P2P transfer or a fresh local build, is a
+     * temporary extraction/cache directory that gets deleted shortly after install. Nothing
+     * ever copied the referenced file anywhere permanent, so any such asset was unusable the
+     * moment cleanup ran. Copies it into permanent per-package storage and rewrites the path
+     * to point there instead.
+     */
+    private fun ContentBlockDto.withPersistedAsset(dir: File, packageId: String): ContentBlockDto {
+        val relativePath = assetPath ?: return this
+        val sourceFile = File(dir, relativePath)
+        if (!sourceFile.exists() || !sourceFile.isFile) return this
+
+        val destDir = File(context.filesDir, "content_assets/$packageId")
+        destDir.mkdirs()
+        val destFile = File(destDir, sourceFile.name)
+        return try {
+            sourceFile.copyTo(destFile, overwrite = true)
+            copy(assetPath = destFile.absolutePath)
+        } catch (e: Exception) {
+            SecureLogger.e("ContentInstaller", "Could not persist asset $relativePath for $packageId", e)
+            this
+        }
     }
 }
 

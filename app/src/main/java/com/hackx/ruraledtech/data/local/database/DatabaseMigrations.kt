@@ -24,5 +24,12 @@ object DatabaseMigrations {
             db.execSQL("ALTER TABLE lessons ADD COLUMN classId TEXT DEFAULT NULL")
         }
     }
-}
 
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE class_groups ADD COLUMN joinCode TEXT NOT NULL DEFAULT ''")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `class_material_assignments` (`assignmentId` TEXT NOT NULL, `classId` TEXT NOT NULL, `packageId` TEXT NOT NULL, `version` INTEGER NOT NULL, `teacherId` TEXT NOT NULL, `sharedAt` INTEGER NOT NULL, PRIMARY KEY(`assignmentId`))")
+            db.execSQL("CREATE TABLE IF NOT EXISTS `material_requests` (`requestId` TEXT NOT NULL, `classId` TEXT NOT NULL, `packageId` TEXT NOT NULL, `requesterId` TEXT NOT NULL, `providerId` TEXT, `status` TEXT NOT NULL, `isIncoming` INTEGER NOT NULL, `lastUpdated` INTEGER NOT NULL, PRIMARY KEY(`requestId`))")
+        }
+    }
+}

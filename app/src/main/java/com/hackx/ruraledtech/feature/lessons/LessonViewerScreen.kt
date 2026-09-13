@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
@@ -25,6 +26,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.hackx.ruraledtech.domain.model.CalloutTone
@@ -170,6 +172,44 @@ private fun ContentBlockView(block: ContentBlock, onPlayAudio: (String) -> Unit,
             )
         }
         is ContentBlock.Video -> Card { Text("Video: ${block.assetPath}", modifier = Modifier.padding(12.dp)) }
+        is ContentBlock.Document -> {
+            val context = LocalContext.current
+            Card {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Description, contentDescription = null, modifier = Modifier.padding(end = 12.dp))
+                    Text(block.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Button(onClick = { openDocument(context, block.assetPath) }) {
+                        Text("Open")
+                    }
+                }
+            }
+        }
         is ContentBlock.Unsupported -> Unit
+    }
+}
+
+/** Opens a persisted document asset (see ContentInstallerImpl.withPersistedAsset) via whatever app the device already has for its type — no bundled renderer needed. */
+private fun openDocument(context: android.content.Context, absolutePath: String) {
+    try {
+        val file = java.io.File(absolutePath)
+        if (!file.exists()) {
+            android.widget.Toast.makeText(context, "This document isn't available on this device.", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val mimeType = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension) ?: "*/*"
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (e: android.content.ActivityNotFoundException) {
+        android.widget.Toast.makeText(context, "No app installed that can open this file type.", android.widget.Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "Could not open document: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
     }
 }

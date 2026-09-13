@@ -32,7 +32,7 @@ class LessonListViewModel @Inject constructor(
         viewModelScope.launch {
             val learnerId = currentLearnerManager.currentLearnerId.value ?: return@launch
             val learner = learnerRepository.getLearner(learnerId) ?: return@launch
-            val lessons = getLessonsUseCase(subject, learner.grade, learner.preferredLanguage)
+            val lessons = getLessonsUseCase(subject, learner.grade, learner.preferredLanguage, learnerId)
             _state.value = if (lessons.isEmpty()) UiState.Empty else UiState.Success(lessons)
         }
     }

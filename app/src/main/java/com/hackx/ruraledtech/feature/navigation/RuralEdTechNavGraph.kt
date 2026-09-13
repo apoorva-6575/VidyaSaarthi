@@ -23,7 +23,6 @@ import com.hackx.ruraledtech.feature.profile.ProfileScreen
 import com.hackx.ruraledtech.feature.progress.ProgressScreen
 import com.hackx.ruraledtech.feature.quiz.QuizScreen
 import com.hackx.ruraledtech.feature.splash.SplashScreen
-import com.hackx.ruraledtech.feature.teacher.ClassAnalyticsScreen
 import com.hackx.ruraledtech.feature.teacher.TeacherHomeScreen
 import com.hackx.ruraledtech.feature.teacher.TeacherLoginScreen
 
@@ -63,19 +62,8 @@ fun RuralEdTechNavGraph(navController: NavHostController = rememberNavController
         composable(Routes.TEACHER_HOME) {
             TeacherHomeScreen(
                 onSwitchToStudent = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
-                onOpenClassAnalytics = { classId -> navController.navigate(Routes.classAnalytics(classId)) },
                 onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
                 onLoggedOut = { navController.navigate(Routes.ROLE_SELECTION) { popUpTo(Routes.TEACHER_HOME) { inclusive = true } } },
-            )
-        }
-
-        composable(
-            route = Routes.CLASS_ANALYTICS,
-            arguments = listOf(navArgument(Routes.ARG_CLASS_ID) { type = NavType.StringType }),
-        ) {
-            ClassAnalyticsScreen(
-                onBack = { navController.popBackStack() },
-                onOpenContentLibrary = { navController.navigate(Routes.CONTENT_LIBRARY) },
             )
         }
 

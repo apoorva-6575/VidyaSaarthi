@@ -28,6 +28,7 @@ class ClassGroupCreate(ClassGroupBase):
 
 class ClassGroupResponse(ClassGroupBase):
     id: str
+    join_code: str
     teacher_id: str
     created_at: datetime
     updated_at: Optional[datetime] = None

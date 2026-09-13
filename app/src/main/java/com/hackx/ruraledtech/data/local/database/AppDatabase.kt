@@ -46,8 +46,10 @@ import com.hackx.ruraledtech.data.local.entities.SyncEventEntity
         com.hackx.ruraledtech.data.local.entities.ClassGroupLearnerEntity::class,
         com.hackx.ruraledtech.data.local.entities.TeacherDashboardCacheEntity::class,
         com.hackx.ruraledtech.data.local.entities.ClassAnalyticsCacheEntity::class,
+        com.hackx.ruraledtech.data.local.entities.ClassMaterialAssignmentEntity::class,
+        com.hackx.ruraledtech.data.local.entities.MaterialRequestEntity::class,
     ],
-    version = 4,
+    version = 7,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -64,6 +66,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun syncEventDao(): SyncEventDao
     abstract fun classGroupDao(): com.hackx.ruraledtech.data.local.dao.ClassGroupDao
     abstract fun teacherCacheDao(): com.hackx.ruraledtech.data.local.dao.TeacherCacheDao
+    abstract fun classMaterialAssignmentDao(): com.hackx.ruraledtech.data.local.dao.ClassMaterialAssignmentDao
+    abstract fun materialRequestDao(): com.hackx.ruraledtech.data.local.dao.MaterialRequestDao
 
     companion object {
         const val DATABASE_NAME = "rural_edtech.db"

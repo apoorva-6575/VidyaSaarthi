@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, learners, classes, sync, content, teacher
+from app.api.routes import auth, learners, classes, sync, content, teacher, material_requests
 
 app = FastAPI(
     title="Rural EdTech Platform - Group 4 Backend",
@@ -67,3 +67,4 @@ app.include_router(content.router, prefix="/api/v1/content", tags=["Content"])
 app.include_router(teacher.router, prefix="/api/v1/teacher", tags=["Teacher Analytics"])
 app.include_router(learners.router, prefix="/api/v1/learners", tags=["Learners"])
 app.include_router(classes.router, prefix="/api/v1/classes", tags=["Classes"])
+app.include_router(material_requests.router, prefix="/api/v1/material-requests", tags=["Material Requests"])

@@ -43,12 +43,51 @@ data class LearnerDto(
 @Serializable
 data class ClassGroupDto(
     val id: String,
+    val join_code: String = "",
     val name: String,
     val grade: String? = null,
     val subject: String? = null,
     val teacher_id: String? = null,
     val created_at: String? = null,
     val learners: List<LearnerDto> = emptyList(),
+)
+
+@Serializable
+data class ClassMaterialAssignmentDto(
+    val package_id: String,
+    val version: Int,
+    val shared_at: String? = null
+)
+
+@Serializable
+data class ClassMaterialRequestDto(
+    val package_id: String,
+    val version: Int
+)
+
+@Serializable
+data class MaterialRequestCreateDto(
+    val class_id: String,
+    val package_id: String,
+    val requester_id: String
+)
+
+@Serializable
+data class MaterialRequestUpdateDto(
+    val status: String,
+    val provider_id: String? = null
+)
+
+@Serializable
+data class MaterialRequestResponseDto(
+    val id: String,
+    val class_id: String,
+    val package_id: String,
+    val requester_id: String,
+    val provider_id: String?,
+    val status: String,
+    val created_at: String,
+    val updated_at: String?
 )
 
 @Serializable

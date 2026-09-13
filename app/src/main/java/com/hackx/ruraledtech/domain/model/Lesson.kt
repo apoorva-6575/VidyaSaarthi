@@ -23,6 +23,9 @@ sealed class ContentBlock {
 
     data class Video(override val blockId: String, val assetPath: String) : ContentBlock()
 
+    /** A source document (PDF/PPT/etc.) attached to the lesson, opened via the device's own viewer app. */
+    data class Document(override val blockId: String, val assetPath: String, val title: String) : ContentBlock()
+
     data class Example(override val blockId: String, val prompt: String, val explanation: String) : ContentBlock()
 
     data class Callout(override val blockId: String, val message: String, val tone: CalloutTone) : ContentBlock()

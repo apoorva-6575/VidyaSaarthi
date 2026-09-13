@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Matches where ContentInstallerImpl permanently persists lesson document assets. -->
+    <files-path name="content_assets" path="content_assets/" />
+</paths>

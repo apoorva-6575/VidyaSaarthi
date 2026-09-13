@@ -117,6 +117,7 @@ class ProfileViewModel @Inject constructor(
                     val dto = response.body()!!
                     val entity = ClassGroupEntity(
                         classId = dto.id,
+                        joinCode = dto.join_code,
                         name = dto.name,
                         grade = dto.grade,
                         subject = dto.subject,
@@ -134,12 +135,12 @@ class ProfileViewModel @Inject constructor(
                     return@launch
                 }
             } catch (_: Exception) {
-                // Offline fallback below
+                // Network error, try offline fallback
             }
 
-            val localClass = classGroupDao.getByCodePrefix(cleanCode.lowercase())
-                ?: classGroupDao.getByCodePrefix(cleanCode)
-                ?: classGroupDao.getById(cleanCode)
+            // If we're offline, check if we already have this class locally.
+            // If yes, just map the learner to it. If not, fail.
+            val localClass = classGroupDao.getByJoinCode(cleanCode)
 
             if (localClass != null) {
                 classGroupDao.insertLearnerMapping(
@@ -148,22 +149,7 @@ class ProfileViewModel @Inject constructor(
                 meshController.broadcastLearnerSync()
                 onResult(true, "Joined ${localClass.name} (offline mode)")
             } else {
-                // Auto-create local offline class group with this join code so learner is never blocked
-                val offlineClassId = cleanCode.lowercase()
-                val offlineEntity = ClassGroupEntity(
-                    classId = offlineClassId,
-                    name = "Class $cleanCode",
-                    grade = currentLearner.grade.toString(),
-                    subject = "General",
-                    teacherId = "offline-teacher",
-                    lastSynced = System.currentTimeMillis()
-                )
-                classGroupDao.insert(offlineEntity)
-                classGroupDao.insertLearnerMapping(
-                    ClassGroupLearnerEntity(offlineClassId, currentLearner.learnerId)
-                )
-                meshController.broadcastLearnerSync()
-                onResult(true, "Joined Class $cleanCode (offline peer mode)!")
+                onResult(false, "You are offline and this class is not known locally. Please connect to the internet to join for the first time.")
             }
         }
     }

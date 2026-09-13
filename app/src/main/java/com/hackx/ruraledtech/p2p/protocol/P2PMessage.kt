@@ -75,4 +75,45 @@ sealed interface P2PMessage {
         val preferredLanguage: String,
         val enrolledClassIds: List<String> = emptyList(),
     ) : P2PMessage
+
+    @Serializable
+    data class ClassMaterialOffer(
+        override val messageId: String,
+        override val senderDeviceId: String,
+        override val timestamp: Long,
+        val packageId: String,
+        val version: Int,
+        val subject: String,
+        val sizeBytes: Long,
+        val expectedHash: String = "",
+        val title: String = ""
+    ) : P2PMessage
+
+    @Serializable
+    data class ClassMaterialRequest(
+        override val messageId: String,
+        override val senderDeviceId: String,
+        override val timestamp: Long,
+        val requestId: String,
+        val packageId: String,
+        val requesterId: String
+    ) : P2PMessage
+
+    @Serializable
+    data class TransferPayloadCorrelation(
+        override val messageId: String,
+        override val senderDeviceId: String,
+        override val timestamp: Long,
+        val transferId: String,
+        val payloadId: Long
+    ) : P2PMessage
+
+    @Serializable
+    data class MaterialRequestDecision(
+        override val messageId: String,
+        override val senderDeviceId: String,
+        override val timestamp: Long,
+        val requestId: String,
+        val approved: Boolean
+    ) : P2PMessage
 }

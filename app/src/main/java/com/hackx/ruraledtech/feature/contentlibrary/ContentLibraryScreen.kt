@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
@@ -75,10 +76,17 @@ fun ContentLibraryScreen(
     val transfers by viewModel.transfers.collectAsState()
     val connectedEndpoints by viewModel.connectedEndpoints.collectAsState()
     val availablePeerPackages by viewModel.availablePeerPackages.collectAsState()
-    val teacherClasses by viewModel.teacherClasses.collectAsState()
+    val incomingOffers by viewModel.incomingOffers.collectAsState()
+    val materialRequests by viewModel.materialRequests.collectAsState()
     var showCreateMaterialDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    
+    androidx.compose.runtime.LaunchedEffect(viewModel) {
+        viewModel.shareErrors.collect { errorMsg ->
+            android.widget.Toast.makeText(context, errorMsg, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { _ ->
         val missing = P2PPermissions.getMissingPermissions(context)
         if (missing.isEmpty()) {
@@ -165,10 +173,15 @@ fun ContentLibraryScreen(
                     transfers = transfers,
                     connectedEndpoints = connectedEndpoints,
                     availablePeerPackages = availablePeerPackages,
+                    incomingOffers = incomingOffers,
                     onStartMesh = onStartMesh,
                     onStopMesh = { viewModel.stopMesh() },
                     onSyncFromCloud = { viewModel.syncFromCloud() },
                     onRequestPeerPackage = { viewModel.requestPackage(it) },
+                    onAcceptOffer = { viewModel.acceptOffer(it) },
+                    materialRequests = materialRequests,
+                    onApproveRequest = { viewModel.approveRequest(it) },
+                    onDeclineRequest = { viewModel.declineRequest(it) }
                 )
             }
 
@@ -236,17 +249,15 @@ fun ContentLibraryScreen(
     if (showCreateMaterialDialog) {
         CreateMaterialDialog(
             viewModel = viewModel,
-            teacherClasses = teacherClasses,
             onDismiss = { showCreateMaterialDialog = false },
-            onUpload = { title, subject, grade, lang, concept, content, classId, onDone ->
+            onUpload = { title, subject, grade, lang, concept, content, onDone ->
                 viewModel.createAndUploadMaterial(
                     title = title,
                     subject = subject,
                     grade = grade,
                     language = lang,
                     conceptName = concept,
-                    content = content,
-                    classId = classId,
+                    content = content
                 ) { success, msg ->
                     onDone(success, msg)
                     if (success) {
@@ -264,10 +275,15 @@ private fun LearningMeshCard(
     transfers: List<TransferTask>,
     connectedEndpoints: List<String>,
     availablePeerPackages: List<PackageDescriptor>,
+    incomingOffers: List<com.hackx.ruraledtech.p2p.protocol.P2PMessage.ClassMaterialOffer>,
     onStartMesh: () -> Unit,
     onStopMesh: () -> Unit,
     onSyncFromCloud: () -> Unit,
     onRequestPeerPackage: (String) -> Unit,
+    onAcceptOffer: (com.hackx.ruraledtech.p2p.protocol.P2PMessage.ClassMaterialOffer) -> Unit,
+    materialRequests: List<com.hackx.ruraledtech.data.local.entities.MaterialRequestEntity>,
+    onApproveRequest: (String) -> Unit,
+    onDeclineRequest: (String) -> Unit,
 ) {
     val isMeshActive = meshState != MeshState.OFFLINE && meshState != MeshState.ERROR
 
@@ -353,6 +369,73 @@ private fun LearningMeshCard(
                 }
             }
 
+            if (incomingOffers.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f), MaterialTheme.shapes.small)
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        "👩‍🏫 Shared by Teacher (${incomingOffers.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    incomingOffers.distinctBy { it.packageId }.forEach { offer ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(offer.subject, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Package: ${offer.packageId}", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Button(
+                                onClick = { onAcceptOffer(offer) },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Text(" 📥 Accept", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (materialRequests.isNotEmpty()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Pending Material Requests", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+                    materialRequests.forEach { req ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha=0.5f), MaterialTheme.shapes.small).padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Package: ${req.packageId}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                Text("From: ${req.requesterId.take(6)}", style = MaterialTheme.typography.labelSmall)
+                            }
+                            Row {
+                                IconButton(onClick = { onApproveRequest(req.requestId) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = "Approve", tint = MaterialTheme.colorScheme.primary)
+                                }
+                                IconButton(onClick = { onDeclineRequest(req.requestId) }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Filled.Cancel, contentDescription = "Decline", tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             transfers.forEach { transfer ->
                 Column(modifier = Modifier.padding(top = 10.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -371,6 +454,20 @@ private fun LearningMeshCard(
                         progress = { transfer.progressPercent / 100f },
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     )
+                }
+            }
+
+            if (transfers.isNotEmpty()) {
+                Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp).background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium).padding(12.dp)) {
+                    Text("P2P Debug Panel", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    transfers.forEach { t ->
+                        Text("Pkg: ${t.packageId}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text("EP: ${t.endpointId} | State: ${t.state}", style = MaterialTheme.typography.labelSmall)
+                        Text("Size: ${t.sizeBytes / 1024} KB | Progress: ${t.progressPercent}%", style = MaterialTheme.typography.labelSmall)
+                        Text("Exp Hash: ${t.expectedHash.take(8)}...", style = MaterialTheme.typography.labelSmall)
+                        Text("Act Hash: ${t.actualHash?.take(8) ?: "..."}", style = MaterialTheme.typography.labelSmall)
+                        Text("Install: ${t.installResult ?: "..."}", style = MaterialTheme.typography.labelSmall, color = if (t.state == TransferState.FAILED) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 
@@ -423,7 +520,6 @@ private fun CreateMaterialDialog(
         language: String,
         concept: String,
         content: String,
-        classId: String?,
         onDone: (Boolean, String) -> Unit
     ) -> Unit,
 ) {
@@ -433,7 +529,6 @@ private fun CreateMaterialDialog(
     var language by remember { mutableStateOf("en") }
     var conceptName by remember { mutableStateOf("") }
     var contentText by remember { mutableStateOf("") }
-    var selectedClassId by remember { mutableStateOf<String?>(teacherClasses.firstOrNull()?.classId) }
 
     var isUploading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -514,31 +609,7 @@ private fun CreateMaterialDialog(
                     }
                 }
 
-                if (teacherClasses.isNotEmpty()) {
-                    Text("Target Class:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    androidx.compose.foundation.layout.FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        androidx.compose.material3.FilterChip(
-                            selected = selectedClassId == null,
-                            onClick = { selectedClassId = null },
-                            label = { Text("General (All)") }
-                        )
-                        teacherClasses.forEach { cls ->
-                            androidx.compose.material3.FilterChip(
-                                selected = selectedClassId == cls.classId,
-                                onClick = {
-                                    selectedClassId = cls.classId
-                                    if (!cls.grade.isNullOrBlank()) gradeText = cls.grade
-                                    if (!cls.subject.isNullOrBlank()) subject = cls.subject
-                                },
-                                label = { Text("${cls.name} (${cls.classId.take(6).uppercase()})") }
-                            )
-                        }
-                    }
-                }
+
 
                 OutlinedTextField(
                     value = title,
@@ -624,8 +695,7 @@ private fun CreateMaterialDialog(
                         grade,
                         language,
                         conceptName,
-                        contentText,
-                        selectedClassId,
+                        contentText
                     ) { success, msg ->
                         isUploading = false
                         isSuccess = success

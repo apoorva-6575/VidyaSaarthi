@@ -17,4 +17,6 @@ data class ContentPackageEntity(
     val installedAt: Long?,
     val state: String,
     val priority: String,
+    /** Same personal-space rule as LessonEntity.receivedByLearnerId — null means shared/global. */
+    val receivedByLearnerId: String? = null,
 )

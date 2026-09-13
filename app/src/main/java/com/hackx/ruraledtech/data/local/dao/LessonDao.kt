@@ -14,26 +14,27 @@ interface LessonDao {
     @Query("SELECT * FROM lessons WHERE lessonId = :id")
     suspend fun getById(id: String): LessonEntity?
 
-    @Query("SELECT DISTINCT subject FROM lessons WHERE grade = :grade")
-    suspend fun getSubjects(grade: Int): List<String>
+    /** [learnerId] scoping: a lesson is visible if it's shared (receivedByLearnerId IS NULL) or was received by this specific learner — see LessonEntity.receivedByLearnerId. */
+    @Query("SELECT DISTINCT subject FROM lessons WHERE grade = :grade AND (receivedByLearnerId IS NULL OR receivedByLearnerId = :learnerId)")
+    suspend fun getSubjects(grade: Int, learnerId: String): List<String>
 
     @Query(
         "SELECT * FROM lessons WHERE subject = :subject AND grade = :grade AND language = :language " +
-            "ORDER BY orderIndex ASC",
+            "AND (receivedByLearnerId IS NULL OR receivedByLearnerId = :learnerId) ORDER BY orderIndex ASC",
     )
-    suspend fun getForSubject(subject: String, grade: Int, language: String): List<LessonEntity>
+    suspend fun getForSubject(subject: String, grade: Int, language: String, learnerId: String): List<LessonEntity>
 
     @Query(
         "SELECT * FROM lessons WHERE subject = :subject AND grade = :grade " +
-            "ORDER BY orderIndex ASC",
+            "AND (receivedByLearnerId IS NULL OR receivedByLearnerId = :learnerId) ORDER BY orderIndex ASC",
     )
-    suspend fun getForSubjectAnyLanguage(subject: String, grade: Int): List<LessonEntity>
+    suspend fun getForSubjectAnyLanguage(subject: String, grade: Int, learnerId: String): List<LessonEntity>
 
-    @Query("SELECT DISTINCT subject FROM lessons")
-    suspend fun getAllSubjects(): List<String>
+    @Query("SELECT DISTINCT subject FROM lessons WHERE receivedByLearnerId IS NULL OR receivedByLearnerId = :learnerId")
+    suspend fun getAllSubjects(learnerId: String): List<String>
 
-    @Query("SELECT * FROM lessons WHERE subject = :subject ORDER BY orderIndex ASC")
-    suspend fun getForSubjectAllGrades(subject: String): List<LessonEntity>
+    @Query("SELECT * FROM lessons WHERE subject = :subject AND (receivedByLearnerId IS NULL OR receivedByLearnerId = :learnerId) ORDER BY orderIndex ASC")
+    suspend fun getForSubjectAllGrades(subject: String, learnerId: String): List<LessonEntity>
 
     @Query("SELECT * FROM lessons ORDER BY orderIndex ASC")
     suspend fun getAllLessons(): List<LessonEntity>

@@ -11,7 +11,7 @@
       Cleartext stays disabled for every other host.
     -->
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">172.20.10.2</domain>
+        <domain includeSubdomains="true">10.68.1.85</domain>
         <domain includeSubdomains="true">10.171.250.90</domain>
         <domain includeSubdomains="true">10.58.28.231</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>

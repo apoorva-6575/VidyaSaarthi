@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -56,6 +58,16 @@ class MeshController(
 
     private val _availablePeerPackagesFlow = MutableStateFlow<List<PackageDescriptor>>(emptyList())
     val availablePeerPackagesFlow: StateFlow<List<PackageDescriptor>> = _availablePeerPackagesFlow.asStateFlow()
+
+    private val _incomingMessages = MutableSharedFlow<P2PMessage>(extraBufferCapacity = 64)
+    val incomingMessages = _incomingMessages.asSharedFlow()
+
+    val localEndpointId: String get() = deviceId
+
+    fun broadcastMessage(message: P2PMessage) {
+        val payload = ProtocolSerializer.serialize(message)
+        connectedEndpoints.forEach { connectionManager.sendBytes(it, payload) }
+    }
 
     init {
         coroutineScope.launch {
@@ -340,6 +352,10 @@ class MeshController(
             Log.e(TAG, "Failed to deserialize incoming P2PMessage from $endpointId")
             return
         }
+        
+        coroutineScope.launch {
+            _incomingMessages.emit(message)
+        }
 
         when (message) {
             is P2PMessage.Hello -> Log.d(TAG, "Received Hello from ${message.senderDeviceId}")
@@ -380,6 +396,13 @@ class MeshController(
                         Log.e(TAG, "Error handling LearnerSync over P2P", e)
                     }
                 }
+            }
+            is P2PMessage.TransferPayloadCorrelation -> {
+                Log.d(TAG, "Received TransferPayloadCorrelation from $endpointId: transferId=${message.transferId} payloadId=${message.payloadId}")
+                transferManager?.associatePayloadId(endpointId, message.payloadId, message.transferId)
+            }
+            else -> {
+                // Handled by other components (e.g. ClassroomMeshCoordinator)
             }
         }
     }
@@ -563,6 +586,15 @@ class MeshController(
         val payloadId = transferManager?.startOutboundTransfer(accept.transferId)
         if (payloadId != null) {
             Log.d(TAG, "Started outbound file payload $payloadId for transfer ${accept.transferId}")
+            
+            val correlation = P2PMessage.TransferPayloadCorrelation(
+                messageId = UUID.randomUUID().toString(),
+                senderDeviceId = deviceId,
+                timestamp = System.currentTimeMillis(),
+                transferId = accept.transferId,
+                payloadId = payloadId
+            )
+            connectionManager.sendBytes(endpointId, ProtocolSerializer.serialize(correlation))
         } else {
             Log.e(TAG, "Failed to start outbound transfer for ${accept.transferId}")
         }

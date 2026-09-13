@@ -25,7 +25,6 @@ object Routes {
     fun lessonViewer(lessonId: String) = "lessons/$lessonId"
     fun quiz(lessonId: String) = "lessons/$lessonId/quiz"
     fun conceptDetail(conceptId: String) = "progress/$conceptId"
-    fun classAnalytics(classId: String) = "teacher/classes/$classId/analytics"
 
     const val ARG_SUBJECT = "subject"
     const val ARG_LESSON_ID = "lessonId"

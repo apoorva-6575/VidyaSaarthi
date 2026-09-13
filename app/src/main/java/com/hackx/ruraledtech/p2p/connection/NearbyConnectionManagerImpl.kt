@@ -47,6 +47,9 @@ class NearbyConnectionManagerImpl @Inject constructor(
     private val incomingFilePayloads =
         java.util.concurrent.ConcurrentHashMap<Long, Payload>()
 
+    private val outgoingFilePayloads =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+
     private val completedBeforeReceived =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
 
@@ -168,10 +171,9 @@ class NearbyConnectionManagerImpl @Inject constructor(
                 }
 
                 PayloadTransferUpdate.Status.SUCCESS -> {
-                    val payload =
-                        incomingFilePayloads.remove(update.payloadId)
+                    val isOutgoing = outgoingFilePayloads.remove(update.payloadId)
 
-                    if (payload == null) {
+                    if (isOutgoing) {
                         Log.d(
                             TAG,
                             "[P2P][FILE_SEND_SUCCESS] " +
@@ -183,7 +185,15 @@ class NearbyConnectionManagerImpl @Inject constructor(
                             endpointId,
                             update.payloadId
                         )
+                        return
+                    }
 
+                    // It's an incoming payload.
+                    val payload = incomingFilePayloads.remove(update.payloadId)
+                    if (payload == null) {
+                        // SUCCESS arrived before onPayloadReceived.
+                        Log.d(TAG, "[P2P][FILE_RECEIVE_SUCCESS_EARLY] SUCCESS arrived before onPayloadReceived for payload ${update.payloadId}")
+                        completedBeforeReceived.add(update.payloadId)
                         return
                     }
 
@@ -204,6 +214,7 @@ class NearbyConnectionManagerImpl @Inject constructor(
                             "status=${update.status}"
                     )
 
+                    outgoingFilePayloads.remove(update.payloadId)
                     incomingFilePayloads.remove(update.payloadId)
                     completedBeforeReceived.remove(update.payloadId)
 
@@ -479,6 +490,7 @@ class NearbyConnectionManagerImpl @Inject constructor(
         Log.d(TAG, "[P2P][FILE_SEND_START] endpoint=$endpointId filename=${file.name} absolutePath=${file.absolutePath} size=${file.length()} bytes")
         val pfd = android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
         val payload = Payload.fromFile(pfd)
+        outgoingFilePayloads.add(payload.id)
         Log.d(TAG, "[P2P][FILE_PAYLOAD_CREATED] payloadId=${payload.id} filename=${file.name} size=${file.length()} bytes")
         connectionsClient.sendPayload(endpointId, payload)
             .addOnSuccessListener { Log.d(TAG, "[P2P][FILE_PAYLOAD_SENT] payloadId=${payload.id} sent to $endpointId") }
@@ -502,6 +514,7 @@ class NearbyConnectionManagerImpl @Inject constructor(
         val pfd = context.contentResolver.openFileDescriptor(fileUri, "r")
             ?: throw java.io.FileNotFoundException("Could not open FileDescriptor for $fileUri")
         val payload = Payload.fromFile(pfd)
+        outgoingFilePayloads.add(payload.id)
         Log.d(TAG, "[P2P][FILE_PAYLOAD_CREATED] payloadId=${payload.id} from uri=$fileUri")
         connectionsClient.sendPayload(endpointId, payload)
             .addOnSuccessListener { Log.d(TAG, "[P2P][FILE_PAYLOAD_SENT] payloadId=${payload.id} sent to $endpointId") }

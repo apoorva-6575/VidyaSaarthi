@@ -12,5 +12,10 @@ data class TransferTask(
     val transferId: String,
     val packageId: String,
     val state: TransferState,
-    val progressPercent: Int
+    val progressPercent: Int,
+    val endpointId: String = "",
+    val expectedHash: String = "",
+    val actualHash: String? = null,
+    val installResult: String? = null,
+    val sizeBytes: Long = 0L
 )

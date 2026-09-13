@@ -23,24 +23,24 @@ class ContentRepositoryImpl @Inject constructor(
     private val contentPackageDao: ContentPackageDao,
 ) : ContentRepository {
 
-    override fun observeInstalledPackages(): Flow<List<ContentPackage>> =
-        contentPackageDao.observeInstalled().map { list -> list.map { it.toDomain() } }
+    override fun observeInstalledPackages(learnerId: String): Flow<List<ContentPackage>> =
+        contentPackageDao.observeInstalledForLearner(learnerId).map { list -> list.map { it.toDomain() } }
 
-    override suspend fun getInstalledPackages(): List<ContentPackage> =
-        contentPackageDao.getInstalled().map { it.toDomain() }
+    override suspend fun getInstalledPackages(learnerId: String): List<ContentPackage> =
+        contentPackageDao.getInstalledForLearner(learnerId).map { it.toDomain() }
 
-    override suspend fun getSubjects(grade: Int): List<String> {
-        val gradeSubjects = lessonDao.getSubjects(grade)
-        val allSubjects = lessonDao.getAllSubjects()
+    override suspend fun getSubjects(grade: Int, learnerId: String): List<String> {
+        val gradeSubjects = lessonDao.getSubjects(grade, learnerId)
+        val allSubjects = lessonDao.getAllSubjects(learnerId)
         return (gradeSubjects + allSubjects).distinct().ifEmpty { listOf("Science", "Mathematics") }
     }
 
-    override suspend fun getLessons(subject: String, grade: Int, language: String): List<Lesson> {
-        val exact = lessonDao.getForSubject(subject, grade, language).map { it.toDomain() }
+    override suspend fun getLessons(subject: String, grade: Int, language: String, learnerId: String): List<Lesson> {
+        val exact = lessonDao.getForSubject(subject, grade, language, learnerId).map { it.toDomain() }
         if (exact.isNotEmpty()) return exact
-        val anyLang = lessonDao.getForSubjectAnyLanguage(subject, grade).map { it.toDomain() }
+        val anyLang = lessonDao.getForSubjectAnyLanguage(subject, grade, learnerId).map { it.toDomain() }
         if (anyLang.isNotEmpty()) return anyLang
-        return lessonDao.getForSubjectAllGrades(subject).map { it.toDomain() }
+        return lessonDao.getForSubjectAllGrades(subject, learnerId).map { it.toDomain() }
     }
 
     override suspend fun getLesson(lessonId: String): ContentLookupResult {

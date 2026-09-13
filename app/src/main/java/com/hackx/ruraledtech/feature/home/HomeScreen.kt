@@ -231,7 +231,7 @@ fun HomeScreen(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(cls.name, style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    "${cls.subject ?: "General"} · Grade ${cls.grade ?: "Any"} · Code: ${cls.classId.take(6).uppercase()}",
+                                    "${cls.subject ?: "General"} · Grade ${cls.grade ?: "Any"} · Code: ${cls.joinCode}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

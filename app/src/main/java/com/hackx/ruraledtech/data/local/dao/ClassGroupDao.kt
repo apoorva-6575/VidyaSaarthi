@@ -40,4 +40,7 @@ interface ClassGroupDao {
 
     @Query("SELECT * FROM class_groups WHERE classId LIKE :prefix || '%' LIMIT 1")
     suspend fun getByCodePrefix(prefix: String): ClassGroupEntity?
+
+    @Query("SELECT * FROM class_groups WHERE joinCode = :joinCode LIMIT 1")
+    suspend fun getByJoinCode(joinCode: String): ClassGroupEntity?
 }

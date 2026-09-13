@@ -88,4 +88,25 @@ interface RuralEdTechApi {
 
     @GET("api/v1/teacher/classes/{class_id}/analytics")
     suspend fun getClassAnalytics(@Path("class_id") classId: String): Response<ClassAnalyticsDto>
+
+    @POST("api/v1/classes/{class_id}/materials")
+    suspend fun assignMaterialToClass(
+        @Path("class_id") classId: String,
+        @Body request: com.hackx.ruraledtech.data.remote.dto.ClassMaterialRequestDto
+    ): Response<Unit>
+
+    @GET("api/v1/classes/{class_id}/materials")
+    suspend fun getClassMaterials(@Path("class_id") classId: String): Response<List<com.hackx.ruraledtech.data.remote.dto.ClassMaterialAssignmentDto>>
+
+    @POST("api/v1/material-requests")
+    suspend fun createMaterialRequest(@Body request: com.hackx.ruraledtech.data.remote.dto.MaterialRequestCreateDto): Response<com.hackx.ruraledtech.data.remote.dto.MaterialRequestResponseDto>
+
+    @GET("api/v1/material-requests")
+    suspend fun getMaterialRequests(@Query("class_id") classId: String? = null): Response<List<com.hackx.ruraledtech.data.remote.dto.MaterialRequestResponseDto>>
+
+    @retrofit2.http.PATCH("api/v1/material-requests/{request_id}")
+    suspend fun updateMaterialRequest(
+        @Path("request_id") requestId: String,
+        @Body request: com.hackx.ruraledtech.data.remote.dto.MaterialRequestUpdateDto
+    ): Response<com.hackx.ruraledtech.data.remote.dto.MaterialRequestResponseDto>
 }

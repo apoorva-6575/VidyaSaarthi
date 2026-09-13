@@ -106,7 +106,10 @@ class TransferManager(
             transferId = transferId,
             packageId = packageId,
             state = com.hackx.ruraledtech.p2p.mesh.TransferState.QUEUED,
-            progressPercent = 0
+            progressPercent = 0,
+            endpointId = endpointId,
+            expectedHash = expectedHash,
+            sizeBytes = sizeBytes
         ))
         Log.d(TAG, "Registered outbound transfer $transferId for package $packageId")
     }
@@ -134,7 +137,10 @@ class TransferManager(
             transferId = transferId,
             packageId = packageId,
             state = com.hackx.ruraledtech.p2p.mesh.TransferState.QUEUED,
-            progressPercent = 0
+            progressPercent = 0,
+            endpointId = endpointId,
+            expectedHash = expectedHash,
+            sizeBytes = sizeBytes
         ))
         Log.d(TAG, "Registered inbound transfer $transferId for package $packageId with expected hash $expectedHash")
     }
@@ -201,7 +207,10 @@ class TransferManager(
             transferId = transferId,
             packageId = transfer.packageId,
             state = com.hackx.ruraledtech.p2p.mesh.TransferState.TRANSFERRING,
-            progressPercent = 0
+            progressPercent = 0,
+            endpointId = transfer.endpointId,
+            expectedHash = transfer.expectedHash,
+            sizeBytes = transfer.sizeBytes
         ))
         return payloadId
     }
@@ -242,7 +251,10 @@ class TransferManager(
                             transferId = transferId,
                             packageId = transfer.packageId,
                             state = com.hackx.ruraledtech.p2p.mesh.TransferState.COMPLETED,
-                            progressPercent = 100
+                            progressPercent = 100,
+                            endpointId = transfer.endpointId,
+                            expectedHash = transfer.expectedHash,
+                            sizeBytes = transfer.sizeBytes
                         )
                 )
 
@@ -265,7 +277,10 @@ class TransferManager(
                     transferId = transferId,
                     packageId = pending.packageId,
                     state = com.hackx.ruraledtech.p2p.mesh.TransferState.TRANSFERRING,
-                    progressPercent = progressPercent
+                    progressPercent = progressPercent,
+                    endpointId = pending.endpointId,
+                    expectedHash = pending.expectedHash,
+                    sizeBytes = pending.sizeBytes
                 ))
             }
         }
@@ -311,7 +326,10 @@ class TransferManager(
             transferId = finalTransferId,
             packageId = finalTransfer.packageId,
             state = com.hackx.ruraledtech.p2p.mesh.TransferState.VERIFYING,
-            progressPercent = 100
+            progressPercent = 100,
+            endpointId = finalTransfer.endpointId,
+            expectedHash = finalTransfer.expectedHash,
+            sizeBytes = finalTransfer.sizeBytes
         ))
 
         coroutineScope.launch {
@@ -343,7 +361,12 @@ class TransferManager(
                     transferId = finalTransferId,
                     packageId = finalTransfer.packageId,
                     state = com.hackx.ruraledtech.p2p.mesh.TransferState.FAILED,
-                    progressPercent = 0
+                    progressPercent = 0,
+                    endpointId = finalTransfer.endpointId,
+                    expectedHash = finalTransfer.expectedHash,
+                    actualHash = calculatedSha256,
+                    installResult = "Verification Failed: Checksum Mismatch",
+                    sizeBytes = finalTransfer.sizeBytes
                 ))
                 return@launch
             }
@@ -437,9 +460,9 @@ class TransferManager(
                     finalTransfer.packageId
             )
 
-            val installedSuccessfully = performInstall(installDir.absolutePath)
+            val installResult = performInstall(installDir.absolutePath)
 
-            if (installedSuccessfully) {
+            if (installResult is InstallResult.Success) {
                 Log.d(
                     TAG,
                     "[P2P][PACKAGE_INSTALL_SUCCESS] " +
@@ -449,7 +472,12 @@ class TransferManager(
                     transferId = finalTransferId,
                     packageId = finalTransfer.packageId,
                     state = com.hackx.ruraledtech.p2p.mesh.TransferState.COMPLETED,
-                    progressPercent = 100
+                    progressPercent = 100,
+                    endpointId = finalTransfer.endpointId,
+                    expectedHash = finalTransfer.expectedHash,
+                    actualHash = calculatedSha256,
+                    installResult = "Success",
+                    sizeBytes = finalTransfer.sizeBytes
                 ))
                 onSuccess?.invoke(finalTransfer.packageId, finalTransfer.version, finalTransfer.expectedHash)
                 onPackageInstalled?.invoke(finalTransfer.packageId, finalTransfer.version)
@@ -457,13 +485,18 @@ class TransferManager(
                 Log.e(
                     TAG,
                     "[P2P][PACKAGE_INSTALL_FAILED] " +
-                        finalTransfer.packageId
+                        finalTransfer.packageId + " Reason: $installResult"
                 )
                 _transfersMap.value = _transfersMap.value + (finalTransferId to com.hackx.ruraledtech.p2p.mesh.TransferTask(
                     transferId = finalTransferId,
                     packageId = finalTransfer.packageId,
                     state = com.hackx.ruraledtech.p2p.mesh.TransferState.FAILED,
-                    progressPercent = 0
+                    progressPercent = 0,
+                    endpointId = finalTransfer.endpointId,
+                    expectedHash = finalTransfer.expectedHash,
+                    actualHash = calculatedSha256,
+                    installResult = installResult.toString(),
+                    sizeBytes = finalTransfer.sizeBytes
                 ))
             }
         }
@@ -476,20 +509,15 @@ class TransferManager(
         Log.d(TAG, "Transfer failed for payload $payloadId. Cleaned up expected file tracking.")
     }
 
-    private suspend fun performInstall(packagePath: String): Boolean {
+    private suspend fun performInstall(packagePath: String): InstallResult {
         if (domainContentInstaller != null) {
-            return when (val result = domainContentInstaller.install(packagePath)) {
-                is InstallResult.Success -> true
-                else -> {
-                    Log.w(TAG, "Domain ContentInstaller returned: $result")
-                    false
-                }
-            }
+            return domainContentInstaller.install(packagePath)
         }
         if (legacyContentInstaller != null) {
-            return legacyContentInstaller.install(packagePath)
+            val success = legacyContentInstaller.install(packagePath)
+            if (success) return InstallResult.Success("", 1)
         }
-        return false
+        return InstallResult.Failed("No ContentInstaller found or legacy failed")
     }
 
     private fun isZipArchive(file: File): Boolean {

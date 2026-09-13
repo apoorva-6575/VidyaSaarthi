@@ -8,12 +8,12 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 class GetSubjectsUseCase @Inject constructor(private val repository: ContentRepository) {
-    suspend operator fun invoke(grade: Int): List<String> = repository.getSubjects(grade)
+    suspend operator fun invoke(grade: Int, learnerId: String): List<String> = repository.getSubjects(grade, learnerId)
 }
 
 class GetLessonsUseCase @Inject constructor(private val repository: ContentRepository) {
-    suspend operator fun invoke(subject: String, grade: Int, language: String): List<Lesson> =
-        repository.getLessons(subject, grade, language)
+    suspend operator fun invoke(subject: String, grade: Int, language: String, learnerId: String): List<Lesson> =
+        repository.getLessons(subject, grade, language, learnerId)
 }
 
 class GetLessonUseCase @Inject constructor(private val repository: ContentRepository) {
@@ -21,7 +21,7 @@ class GetLessonUseCase @Inject constructor(private val repository: ContentReposi
 }
 
 class ObserveInstalledPackagesUseCase @Inject constructor(private val repository: ContentRepository) {
-    operator fun invoke(): Flow<List<ContentPackage>> = repository.observeInstalledPackages()
+    operator fun invoke(learnerId: String): Flow<List<ContentPackage>> = repository.observeInstalledPackages(learnerId)
 }
 
 class RemoveContentPackageUseCase @Inject constructor(private val repository: ContentRepository) {

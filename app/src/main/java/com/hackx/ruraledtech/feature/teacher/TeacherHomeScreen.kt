@@ -8,37 +8,31 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.hackx.ruraledtech.data.local.entities.ClassGroupEntity
+
 
 /**
  * Real teacher-facing class list with offline caching (PS section 6.6/25): sync fetches
@@ -51,25 +45,17 @@ import androidx.compose.runtime.LaunchedEffect
 @Composable
 fun TeacherHomeScreen(
     onSwitchToStudent: () -> Unit,
-    onOpenClassAnalytics: (String) -> Unit,
     onOpenContentLibrary: () -> Unit,
     onLoggedOut: () -> Unit,
     viewModel: TeacherHomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showCreateDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.refreshData()
     }
 
-    Scaffold(
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "Create class")
-            }
-        },
-    ) { padding ->
+    Scaffold { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
         ) {
@@ -79,7 +65,7 @@ fun TeacherHomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column {
-                    Text("My Classes", style = MaterialTheme.typography.headlineMedium)
+                    Text("Teacher Dashboard", style = MaterialTheme.typography.headlineMedium)
                     if (uiState.teacherName.isNotBlank()) {
                         Text(uiState.teacherName, style = MaterialTheme.typography.bodyMedium)
                     }
@@ -87,7 +73,7 @@ fun TeacherHomeScreen(
                 Row {
                     IconButton(
                         onClick = { viewModel.refreshData() },
-                        enabled = !uiState.isLoading && !uiState.isOffline
+                        enabled = !uiState.isLoading
                     ) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Sync Classes")
                     }
@@ -95,14 +81,6 @@ fun TeacherHomeScreen(
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log out")
                     }
                 }
-            }
-
-            if (uiState.isOffline) {
-                Text(
-                    "You are currently offline. Showing cached classes.",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
             }
 
             uiState.dashboard?.let { dashboard ->
@@ -131,10 +109,6 @@ fun TeacherHomeScreen(
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
-                    Icon(
-                        Icons.Filled.ChevronRight,
-                        contentDescription = null,
-                    )
                 }
             }
 
@@ -148,31 +122,6 @@ fun TeacherHomeScreen(
 
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-            } else if (uiState.classes.isEmpty()) {
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Icon(Icons.Filled.School, contentDescription = null, modifier = Modifier.padding(bottom = 16.dp))
-                    Text("No classes found", style = MaterialTheme.typography.titleMedium)
-                    Text("Tap sync to fetch your classes, or the + button to create one", textAlign = TextAlign.Center)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(uiState.classes.size) { index ->
-                        val classGroup = uiState.classes[index]
-                        val learnerCount = uiState.learnerCounts[classGroup.classId] ?: 0
-                        ClassRow(
-                            classGroup = classGroup,
-                            learnerCount = learnerCount,
-                            onClick = { onOpenClassAnalytics(classGroup.classId) }
-                        )
-                    }
-                }
             }
 
             OutlinedButton(
@@ -182,18 +131,6 @@ fun TeacherHomeScreen(
                 Text("Switch to student view")
             }
         }
-    }
-
-    if (showCreateDialog) {
-        CreateClassDialog(
-            creating = uiState.creatingClass,
-            onDismiss = { showCreateDialog = false },
-            onCreate = { name, grade, subject ->
-                viewModel.createClass(name, grade, subject) { success ->
-                    if (success) showCreateDialog = false
-                }
-            },
-        )
     }
 }
 
@@ -243,72 +180,4 @@ private fun formatCachedAt(timestampMillis: Long): String {
     return formatter.format(java.util.Date(timestampMillis))
 }
 
-@Composable
-private fun ClassRow(classGroup: ClassGroupEntity, learnerCount: Int, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(classGroup.name, style = MaterialTheme.typography.titleMedium)
-                if (classGroup.grade != null || classGroup.subject != null) {
-                    Text(
-                        "${classGroup.grade ?: ""} ${classGroup.subject ?: ""}".trim(),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                Row(
-                    modifier = Modifier.padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Code: ${classGroup.classId.take(6).uppercase()}",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        if (learnerCount > 0) "• $learnerCount student${if (learnerCount > 1) "s" else ""}" else "• No students yet",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null)
-        }
-    }
-}
 
-@Composable
-private fun CreateClassDialog(
-    creating: Boolean,
-    onDismiss: () -> Unit,
-    onCreate: (name: String, grade: String?, subject: String?) -> Unit,
-) {
-    var name by remember { mutableStateOf("") }
-    var grade by remember { mutableStateOf("") }
-    var subject by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Create class") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Class name") }, singleLine = true)
-                OutlinedTextField(value = grade, onValueChange = { grade = it }, label = { Text("Grade (optional)") }, singleLine = true)
-                OutlinedTextField(value = subject, onValueChange = { subject = it }, label = { Text("Subject (optional)") }, singleLine = true)
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onCreate(name, grade.ifBlank { null }, subject.ifBlank { null }) },
-                enabled = name.isNotBlank() && !creating,
-            ) {
-                Text(if (creating) "Creating..." else "Create")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}

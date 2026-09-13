@@ -26,7 +26,7 @@ class SubjectListViewModel @Inject constructor(
         viewModelScope.launch {
             val learnerId = currentLearnerManager.currentLearnerId.value ?: return@launch
             val learner = learnerRepository.getLearner(learnerId) ?: return@launch
-            val subjects = getSubjectsUseCase(learner.grade)
+            val subjects = getSubjectsUseCase(learner.grade, learnerId)
             _state.value = if (subjects.isEmpty()) UiState.Empty else UiState.Success(subjects)
         }
     }

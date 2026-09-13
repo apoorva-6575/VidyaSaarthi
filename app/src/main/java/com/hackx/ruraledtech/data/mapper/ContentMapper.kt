@@ -44,7 +44,11 @@ fun QuestionEntity.toDomain(): Question = Question(
     questionId = questionId,
     lessonId = lessonId,
     conceptId = conceptId,
-    questionType = com.hackx.ruraledtech.domain.model.QuestionType.valueOf(questionType),
+    // Some earlier-created packages stored this lowercase (e.g. "single_choice"), which
+    // crashed QuestionType.valueOf() with no fallback and silently broke the whole quiz for
+    // that lesson. Normalize case defensively instead of trusting every producer got it right.
+    questionType = runCatching { com.hackx.ruraledtech.domain.model.QuestionType.valueOf(questionType.uppercase()) }
+        .getOrDefault(com.hackx.ruraledtech.domain.model.QuestionType.SINGLE_CHOICE),
     language = language,
     prompt = prompt,
     options = json.decodeFromString(ListSerializer(QuestionOptionDto.serializer()), optionsJson)
